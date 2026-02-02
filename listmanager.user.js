@@ -1,13 +1,14 @@
 // ==UserScript==
 // @name         List Manager Tweaks
 // @namespace    https://github.com/choujar/greens-userscripts
-// @version      1.2.0
+// @version      1.3.0
 // @description  UX improvements for List Manager
 // @author       Sahil Choujar
 // @match        https://listmanager.greens.org.au/*
 // @grant        GM_addStyle
 // @grant        GM_getValue
 // @grant        GM_setValue
+// @grant        GM_info
 // @updateURL    https://raw.githubusercontent.com/choujar/greens-userscripts/main/listmanager.user.js
 // @downloadURL  https://raw.githubusercontent.com/choujar/greens-userscripts/main/listmanager.user.js
 // ==/UserScript==
@@ -168,6 +169,15 @@ The election has now been called! We need people to hand out 'How to Vote' cards
             .gus-modal-actions button:not(.gus-save):hover {
                 background: #f5f5f5;
             }
+            .gus-version-badge {
+                font-size: 10px;
+                color: #999;
+                font-weight: 400;
+                margin-left: auto;
+                padding-right: 12px;
+                white-space: nowrap;
+                letter-spacing: 0.3px;
+            }
             .gus-banner {
                 background: #fff3e0;
                 border: 1px solid #ffb74d;
@@ -274,6 +284,26 @@ The election has now been called! We need people to hand out 'How to Vote' cards
     }
 
     // =========================================================================
+    // Version badge in top bar
+    // =========================================================================
+
+    function injectVersionBadge() {
+        if (document.querySelector('.gus-version-badge')) return;
+
+        const topBar = document.querySelector('.TopBar-titleText');
+        if (!topBar) return;
+
+        const container = topBar.parentElement;
+        container.style.display = 'flex';
+        container.style.alignItems = 'center';
+
+        const badge = document.createElement('span');
+        badge.className = 'gus-version-badge';
+        badge.textContent = 'Tweaks v' + GM_info.script.version;
+        container.appendChild(badge);
+    }
+
+    // =========================================================================
     // List change detection
     // =========================================================================
 
@@ -308,9 +338,11 @@ The election has now been called! We need people to hand out 'How to Vote' cards
 
     const observer = new MutationObserver(() => {
         injectButton();
+        injectVersionBadge();
         checkListChange();
     });
     observer.observe(document.body, { childList: true, subtree: true });
 
     injectButton();
+    injectVersionBadge();
 })();
