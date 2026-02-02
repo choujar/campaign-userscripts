@@ -163,7 +163,7 @@
                 border-radius: 8px;
                 background: white;
                 cursor: pointer;
-                font-size: 16px;
+                font-size: 22px;
                 margin-left: 10px;
                 vertical-align: middle;
                 transition: background 0.15s, border-color 0.15s;
