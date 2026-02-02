@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         List Manager Tweaks
 // @namespace    https://github.com/choujar/campaign-userscripts
-// @version      1.6.2
+// @version      1.6.3
 // @description  UX improvements for List Manager and Rocket
 // @author       Sahil Choujar
 // @match        https://listmanager.greens.org.au/*
@@ -355,7 +355,7 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                 padding: 2px 8px;
                 font-size: 11px;
                 font-weight: 600;
-                color: #000;
+                color: #fff;
                 background: #2e7d32;
                 border: 1px solid #2e7d32;
                 border-radius: 4px;
@@ -366,7 +366,7 @@ The election has now been called! We need people to hand out 'How to Vote' cards
             }
             .gus-sms-link:hover {
                 background: #256b29;
-                color: #000;
+                color: #fff;
             }
             .gus-modal .gus-preview-label {
                 font-size: 13px;
