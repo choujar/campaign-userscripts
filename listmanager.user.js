@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         List Manager Tweaks
 // @namespace    https://github.com/choujar/campaign-userscripts
-// @version      1.6.3
+// @version      1.7.0
 // @description  UX improvements for List Manager and Rocket
 // @author       Sahil Choujar
 // @match        https://listmanager.greens.org.au/*
@@ -10,6 +10,7 @@
 // @grant        GM_getValue
 // @grant        GM_setValue
 // @grant        GM_info
+// @grant        GM_xmlhttpRequest
 // @updateURL    https://cdn.jsdelivr.net/gh/choujar/campaign-userscripts@main/listmanager.user.js
 // @downloadURL  https://cdn.jsdelivr.net/gh/choujar/campaign-userscripts@main/listmanager.user.js
 // ==/UserScript==
@@ -448,32 +449,155 @@ The election has now been called! We need people to hand out 'How to Vote' cards
             return null;
         }
 
+        // =================================================================
+        // Electorate lookup via ECSA polygon data
+        // =================================================================
+
+        let ecsaDistricts = null; // cached polygon data
+        let ecsaLoading = false;
+        let ecsaCallbacks = [];
+
+        function loadEcsaData(callback) {
+            if (ecsaDistricts) {
+                callback(ecsaDistricts);
+                return;
+            }
+            ecsaCallbacks.push(callback);
+            if (ecsaLoading) return;
+            ecsaLoading = true;
+
+            GM_xmlhttpRequest({
+                method: 'GET',
+                url: 'https://www.ecsa.sa.gov.au/index.php?option=com_ecsa_map&task=get_sa_council_region&format=map_service',
+                onload: function(response) {
+                    try {
+                        const data = JSON.parse(response.responseText);
+                        const districts2026 = data['2026'] || [];
+                        ecsaDistricts = districts2026.map(d => ({
+                            name: d.name,
+                            paths: d.paths
+                        }));
+                        ecsaCallbacks.forEach(cb => cb(ecsaDistricts));
+                        ecsaCallbacks = [];
+                    } catch (e) {
+                        console.error('[GUS] Failed to parse ECSA data:', e);
+                        ecsaCallbacks.forEach(cb => cb(null));
+                        ecsaCallbacks = [];
+                    }
+                },
+                onerror: function(err) {
+                    console.error('[GUS] Failed to fetch ECSA data:', err);
+                    ecsaCallbacks.forEach(cb => cb(null));
+                    ecsaCallbacks = [];
+                }
+            });
+        }
+
+        function findElectorate(address, callback) {
+            // Wait for Google Maps to be available
+            if (typeof google === 'undefined' || !google.maps || !google.maps.Geocoder) {
+                console.log('[GUS] Google Maps not ready, retrying...');
+                setTimeout(() => findElectorate(address, callback), 1000);
+                return;
+            }
+
+            const geocoder = new google.maps.Geocoder();
+            geocoder.geocode({ address: address + ', SA, Australia' }, (results, status) => {
+                if (status !== 'OK' || !results[0]) {
+                    console.log('[GUS] Geocode failed:', status);
+                    callback(null);
+                    return;
+                }
+
+                const latlng = results[0].geometry.location;
+                console.log('[GUS] Geocoded to:', latlng.lat(), latlng.lng());
+
+                loadEcsaData((districts) => {
+                    if (!districts) {
+                        callback(null);
+                        return;
+                    }
+
+                    for (const district of districts) {
+                        if (district.name === 'All Districts') continue;
+
+                        try {
+                            // Decode paths and build polygon
+                            const polygonPaths = district.paths.map(encodedPath =>
+                                google.maps.geometry.encoding.decodePath(encodedPath)
+                            );
+                            const polygon = new google.maps.Polygon({ paths: polygonPaths });
+
+                            if (google.maps.geometry.poly.containsLocation(latlng, polygon)) {
+                                // Title case the district name
+                                const name = district.name.charAt(0).toUpperCase() +
+                                    district.name.slice(1).toLowerCase();
+                                console.log('[GUS] Found electorate:', name);
+                                callback(name);
+                                return;
+                            }
+                        } catch (e) {
+                            // Skip malformed districts
+                        }
+                    }
+
+                    console.log('[GUS] No electorate found for location');
+                    callback(null);
+                });
+            });
+        }
+
+        // Cache electorate per contact address to avoid re-geocoding
+        let cachedElectorate = { address: null, electorate: null };
+
+        function getElectorateForContact(callback) {
+            const addrSpan = document.querySelector('span[agc-address]');
+            if (!addrSpan) {
+                callback(null);
+                return;
+            }
+
+            const address = addrSpan.textContent.trim();
+            if (cachedElectorate.address === address) {
+                callback(cachedElectorate.electorate);
+                return;
+            }
+
+            findElectorate(address, (electorate) => {
+                cachedElectorate = { address: address, electorate: electorate };
+                callback(electorate);
+            });
+        }
+
         function getRocketTemplate() {
             // Try shared template from List Manager, fall back to default
             const shared = GM_getValue('smsTemplate_current', null);
             return shared || DEFAULT_TEMPLATE_ROCKET;
         }
 
-        function fillTemplate(template, name, suburb) {
+        function fillTemplate(template, name, suburb, electorate) {
             let filled = template;
             filled = filled.replace(/\[their name\]/gi, name || '[their name]');
             filled = filled.replace(/\[suburb\]/gi, suburb || '[suburb]');
+            filled = filled.replace(/\[electorate\]/gi, electorate || '[electorate]');
             return filled;
         }
 
-        function fillTemplateForPreview(template, name, suburb) {
+        function fillTemplateForPreview(template, name, suburb, electorate) {
             let html = template
                 .replace(/&/g, '&amp;')
                 .replace(/</g, '&lt;')
                 .replace(/>/g, '&gt;');
 
-            // Replace known placeholders with filled+highlighted or unfilled+orange
             html = html.replace(/\[their name\]/gi, name
                 ? `<span class="gus-filled">${name}</span>`
                 : '<span class="gus-placeholder">[their name]</span>');
             html = html.replace(/\[suburb\]/gi, suburb
                 ? `<span class="gus-filled">${suburb}</span>`
                 : '<span class="gus-placeholder">[suburb]</span>');
+            html = html.replace(/\[electorate\]/gi, electorate
+                ? `<span class="gus-filled">${electorate}</span>`
+                : '<span class="gus-placeholder">[electorate]</span>');
 
             // Any remaining placeholders stay orange
             html = html.replace(/\[([^\]]+)\]/g, '<span class="gus-placeholder">[$1]</span>');
@@ -487,35 +611,47 @@ The election has now been called! We need people to hand out 'How to Vote' cards
         }
 
         function showSmsModal(phone, contactName, suburb) {
+            // Show modal immediately with loading state for electorate
             const template = getRocketTemplate();
-            const filled = fillTemplate(template, contactName.preferred, suburb);
 
             const overlay = document.createElement('div');
             overlay.className = 'gus-overlay';
 
-            const previewHtml = fillTemplateForPreview(template, contactName.preferred, suburb);
+            function renderModal(electorate) {
+                const filled = fillTemplate(template, contactName.preferred, suburb, electorate);
+                const previewHtml = fillTemplateForPreview(template, contactName.preferred, suburb, electorate);
 
-            overlay.innerHTML = `
-                <div class="gus-modal">
-                    <h2>Send SMS</h2>
-                    <div class="gus-to">To: ${contactName.preferred} (${phone.display})</div>
-                    <div class="gus-preview-label">Message preview:</div>
-                    <div class="gus-preview">${previewHtml}</div>
-                    <div class="gus-modal-actions">
-                        <button class="gus-cancel">Cancel</button>
-                        <a class="gus-send" href="${buildSmsUrl(phone.digits, filled)}">Send SMS</a>
+                overlay.innerHTML = `
+                    <div class="gus-modal">
+                        <h2>Send SMS</h2>
+                        <div class="gus-to">To: ${contactName.preferred} (${phone.display})</div>
+                        <div class="gus-preview-label">Message preview:</div>
+                        <div class="gus-preview">${previewHtml}</div>
+                        <div class="gus-modal-actions">
+                            <button class="gus-cancel">Cancel</button>
+                            <a class="gus-send" href="${buildSmsUrl(phone.digits, filled)}">Send SMS</a>
+                        </div>
                     </div>
-                </div>
-            `;
+                `;
 
-            overlay.querySelector('.gus-cancel').addEventListener('click', () => overlay.remove());
+                overlay.querySelector('.gus-cancel').addEventListener('click', () => overlay.remove());
+                overlay.querySelector('.gus-send').addEventListener('click', () => {
+                    setTimeout(() => overlay.remove(), 300);
+                });
+            }
+
             dismissOnEscapeOrClickOutside(overlay);
 
-            overlay.querySelector('.gus-send').addEventListener('click', () => {
-                setTimeout(() => overlay.remove(), 300);
-            });
-
+            // Render immediately without electorate
+            renderModal(null);
             document.body.appendChild(overlay);
+
+            // Then look up electorate and re-render
+            getElectorateForContact((electorate) => {
+                if (electorate && document.body.contains(overlay)) {
+                    renderModal(electorate);
+                }
+            });
         }
 
         function injectSmsLinks() {
