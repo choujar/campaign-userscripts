@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         List Manager Tweaks
 // @namespace    https://github.com/choujar/campaign-userscripts
-// @version      1.7.1
+// @version      1.7.2
 // @description  UX improvements for List Manager and Rocket
 // @author       Sahil Choujar
 // @match        https://listmanager.greens.org.au/*
@@ -400,6 +400,30 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                 border-radius: 3px;
                 font-weight: 500;
             }
+            .gus-electorate-row {
+                margin-top: 2px;
+            }
+            .gus-electorate-row label {
+                font-weight: bold;
+                margin-right: 4px;
+            }
+            .gus-electorate-value {
+                font-weight: normal;
+            }
+            .gus-spinner {
+                display: inline-block;
+                width: 12px;
+                height: 12px;
+                border: 2px solid #ccc;
+                border-top-color: #2e7d32;
+                border-radius: 50%;
+                animation: gus-spin 0.6s linear infinite;
+                vertical-align: middle;
+                margin-left: 4px;
+            }
+            @keyframes gus-spin {
+                to { transform: rotate(360deg); }
+            }
             .gus-modal .gus-to {
                 font-size: 13px;
                 color: #666;
@@ -568,15 +592,40 @@ The election has now been called! We need people to hand out 'How to Vote' cards
             return addrSpan ? addrSpan.textContent.trim() : null;
         }
 
+        function injectElectorateRow() {
+            const addrP = document.querySelector('p[ng-if="fields.show_primary_address"]');
+            if (!addrP) return;
+            if (addrP.parentElement.querySelector('.gus-electorate-row')) return;
+
+            const row = document.createElement('p');
+            row.className = 'col-md-12 gus-electorate-row';
+            row.innerHTML = '<label>Electorate:</label><span class="gus-electorate-value"><span class="gus-spinner"></span></span>';
+
+            addrP.after(row);
+            return row;
+        }
+
+        function updateElectorateDisplay(electorate) {
+            const valueSpan = document.querySelector('.gus-electorate-value');
+            if (!valueSpan) return;
+            if (electorate) {
+                valueSpan.textContent = electorate;
+            } else {
+                valueSpan.innerHTML = '<span style="color:#999">Not found</span>';
+            }
+        }
+
         function prefetchElectorate() {
             const address = getCurrentAddress();
             if (!address) return;
             if (cachedElectorate.address === address) return;
 
             cachedElectorate = { address: address, electorate: null, loading: true };
+            injectElectorateRow();
 
             findElectorate(address, (electorate) => {
                 cachedElectorate = { address: address, electorate: electorate, loading: false };
+                updateElectorateDisplay(electorate);
                 electorateReadyCallbacks.forEach(cb => cb(electorate));
                 electorateReadyCallbacks = [];
             });
