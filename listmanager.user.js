@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         List Manager Tweaks
 // @namespace    https://github.com/choujar/campaign-userscripts
-// @version      1.7.0
+// @version      1.7.1
 // @description  UX improvements for List Manager and Rocket
 // @author       Sahil Choujar
 // @match        https://listmanager.greens.org.au/*
@@ -548,24 +548,37 @@ The election has now been called! We need people to hand out 'How to Vote' cards
         }
 
         // Cache electorate per contact address to avoid re-geocoding
-        let cachedElectorate = { address: null, electorate: null };
+        let cachedElectorate = { address: null, electorate: null, loading: false };
+        let electorateReadyCallbacks = [];
 
         function getElectorateForContact(callback) {
-            const addrSpan = document.querySelector('span[agc-address]');
-            if (!addrSpan) {
-                callback(null);
-                return;
-            }
-
-            const address = addrSpan.textContent.trim();
-            if (cachedElectorate.address === address) {
+            if (cachedElectorate.electorate !== null && cachedElectorate.address === getCurrentAddress()) {
                 callback(cachedElectorate.electorate);
                 return;
             }
+            if (cachedElectorate.loading) {
+                electorateReadyCallbacks.push(callback);
+                return;
+            }
+            callback(null);
+        }
+
+        function getCurrentAddress() {
+            const addrSpan = document.querySelector('span[agc-address]');
+            return addrSpan ? addrSpan.textContent.trim() : null;
+        }
+
+        function prefetchElectorate() {
+            const address = getCurrentAddress();
+            if (!address) return;
+            if (cachedElectorate.address === address) return;
+
+            cachedElectorate = { address: address, electorate: null, loading: true };
 
             findElectorate(address, (electorate) => {
-                cachedElectorate = { address: address, electorate: electorate };
-                callback(electorate);
+                cachedElectorate = { address: address, electorate: electorate, loading: false };
+                electorateReadyCallbacks.forEach(cb => cb(electorate));
+                electorateReadyCallbacks = [];
             });
         }
 
@@ -699,10 +712,12 @@ The election has now been called! We need people to hand out 'How to Vote' cards
 
         const rocketObserver = new MutationObserver(() => {
             injectSmsLinks();
+            prefetchElectorate();
         });
         rocketObserver.observe(document.body, { childList: true, subtree: true });
 
         injectSmsLinks();
+        prefetchElectorate();
     }
 
 })();
