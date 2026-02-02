@@ -13,6 +13,7 @@ Tampermonkey userscripts for campaign platforms (List Manager, Rocket, Lime).
 | Script | Platform | What it does |
 |--------|----------|--------------|
 | [listmanager.user.js](https://cdn.jsdelivr.net/gh/choujar/campaign-userscripts@main/listmanager.user.js) | List Manager | UX improvements (pointer cursor on name fields, SMS template manager) |
+| [rocket.user.js](https://cdn.jsdelivr.net/gh/choujar/campaign-userscripts@main/rocket.user.js) | Rocket (iframe) | SMS link next to mobile numbers with template auto-fill |
 
 ## Contributing
 
