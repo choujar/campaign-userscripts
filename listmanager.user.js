@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         List Manager Tweaks
 // @namespace    https://github.com/choujar/campaign-userscripts
-// @version      1.8.4
+// @version      1.9.0
 // @description  UX improvements for List Manager and Rocket
 // @author       Sahil Choujar
 // @match        https://listmanager.greens.org.au/*
@@ -383,6 +383,25 @@ The election has now been called! We need people to hand out 'How to Vote' cards
             }
             .gus-copy-phone.gus-copied {
                 background: #2e7d32;
+            }
+            .gus-electorate-select {
+                font-size: 24px;
+                font-weight: bold;
+                padding: 2px 8px;
+                border: 1px solid #555;
+                border-radius: 6px;
+                background: #2b2b2b;
+                color: #fff;
+                cursor: pointer;
+                vertical-align: baseline;
+                max-width: 280px;
+            }
+            .gus-electorate-select:hover {
+                border-color: #888;
+            }
+            .gus-electorate-select option {
+                font-size: 14px;
+                font-weight: normal;
             }
             .gus-modal .gus-preview-label {
                 font-size: 13px;
@@ -937,13 +956,69 @@ The election has now been called! We need people to hand out 'How to Vote' cards
             });
         }
 
+        const ELECTORATES = [
+            ['Adelaide', 140511], ['Badcoe', 140512], ['Black', 140513],
+            ['Bragg', 140514], ['Chaffey', 140515], ['Cheltenham', 140516],
+            ['Colton', 140517], ['Croydon', 140518], ['Davenport', 140519],
+            ['Dunstan', 140520], ['Elder', 140521], ['Elizabeth', 140522],
+            ['Enfield', 140523], ['Finniss', 140524], ['Flinders', 140525],
+            ['Florey', 140526], ['Gibson', 140528], ['Giles', 140529],
+            ['Hammond', 140530], ['Hartley', 140531], ['Heysen', 140532],
+            ['Hurtle Vale', 140557], ['Kaurna', 140533], ['Kavel', 140534],
+            ['King', 140535], ['Lee', 140536], ['Light', 140537],
+            ['Mackillop', 140538], ['Mawson', 140539], ['Morialta', 140540],
+            ['Morphett', 140541], ['Mount Gambier', 140542], ['Narungga', 140543],
+            ['Newland', 140544], ['Ngadjuri', 140527], ['Playford', 140545],
+            ['Port Adelaide', 140546], ['Ramsay', 140547], ['Reynell', 140548],
+            ['Schubert', 140549], ['Stuart', 140550], ['Taylor', 140551],
+            ['Torrens', 140552], ['Unley', 140553], ['Waite', 140554],
+            ['West Torrens', 140555], ['Wright', 140556],
+        ];
+
+        function injectElectorateDropdown() {
+            const h2 = document.querySelector('h2.ng-binding');
+            if (!h2 || h2.querySelector('.gus-electorate-select')) return;
+
+            const idMatch = location.hash.match(/boothroster\/(\d+)/);
+            if (!idMatch) return;
+
+            const currentId = parseInt(idMatch[1], 10);
+            const dayMatch = location.hash.match(/day=([^&]*)/);
+            const day = dayMatch ? dayMatch[1] : '0';
+
+            const firstText = h2.childNodes[0];
+            if (!firstText || firstText.nodeType !== Node.TEXT_NODE) return;
+            const electName = firstText.textContent.trim();
+            if (!electName) return;
+
+            const select = document.createElement('select');
+            select.className = 'gus-electorate-select';
+            for (const [name, id] of ELECTORATES) {
+                const opt = document.createElement('option');
+                opt.value = id;
+                opt.textContent = name;
+                if (id === currentId) opt.selected = true;
+                select.appendChild(opt);
+            }
+
+            select.addEventListener('change', () => {
+                location.hash = `#!/boothroster/${select.value}?day=${day}`;
+            });
+
+            firstText.textContent = '';
+            h2.insertBefore(select, h2.firstChild);
+            h2.insertBefore(document.createTextNode(' '), select.nextSibling);
+        }
+
         const rocketObserver = new MutationObserver(() => {
             injectSmsLinks();
+            injectElectorateDropdown();
             prefetchElectorate();
         });
         rocketObserver.observe(document.body, { childList: true, subtree: true });
 
         injectSmsLinks();
+        injectElectorateDropdown();
         prefetchElectorate();
     }
 
