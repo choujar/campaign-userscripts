@@ -800,6 +800,25 @@ The election has now been called! We need people to hand out 'How to Vote' cards
             return html;
         }
 
+        function copyToClipboard(text) {
+            if (navigator.clipboard && window.isSecureContext) {
+                return navigator.clipboard.writeText(text).catch(() => copyFallback(text));
+            }
+            return copyFallback(text);
+        }
+
+        function copyFallback(text) {
+            const ta = document.createElement('textarea');
+            ta.value = text;
+            ta.style.position = 'fixed';
+            ta.style.left = '-9999px';
+            document.body.appendChild(ta);
+            ta.select();
+            document.execCommand('copy');
+            document.body.removeChild(ta);
+            return Promise.resolve();
+        }
+
         function buildSmsUrl(phoneDigits, message) {
             const encoded = encodeURIComponent(message);
             return `sms:${phoneDigits}&body=${encoded}`;
@@ -832,7 +851,7 @@ The election has now been called! We need people to hand out 'How to Vote' cards
 
                 overlay.querySelector('.gus-cancel').addEventListener('click', () => overlay.remove());
                 overlay.querySelector('.gus-copy-sms').addEventListener('click', (e) => {
-                    navigator.clipboard.writeText(filled).then(() => {
+                    copyToClipboard(filled).then(() => {
                         e.target.textContent = 'Copied!';
                         setTimeout(() => { e.target.textContent = 'Copy SMS'; }, 1500);
                     });
@@ -893,7 +912,7 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                 copyLink.addEventListener('click', (e) => {
                     e.preventDefault();
                     e.stopPropagation();
-                    navigator.clipboard.writeText(digits).then(() => {
+                    copyToClipboard(digits).then(() => {
                         copyLink.innerHTML = checkSvg;
                         copyLink.classList.add('gus-copied');
                         setTimeout(() => { copyLink.innerHTML = copySvg; copyLink.classList.remove('gus-copied'); }, 1500);
