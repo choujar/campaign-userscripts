@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         List Manager Tweaks
 // @namespace    https://github.com/choujar/campaign-userscripts
-// @version      1.6.0
+// @version      1.6.1
 // @description  UX improvements for List Manager and Rocket
 // @author       Sahil Choujar
 // @match        https://listmanager.greens.org.au/*
@@ -350,11 +350,13 @@ The election has now been called! We need people to hand out 'How to Vote' cards
         GM_addStyle(`
             .gus-sms-link {
                 display: inline-block;
-                margin-left: 6px;
-                padding: 1px 6px;
+                margin-left: 4px;
+                margin-right: 12px;
+                padding: 2px 8px;
                 font-size: 11px;
                 font-weight: 600;
-                color: #2e7d32;
+                color: #000;
+                background: #2e7d32;
                 border: 1px solid #2e7d32;
                 border-radius: 4px;
                 cursor: pointer;
@@ -363,8 +365,8 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                 transition: background 0.15s, color 0.15s;
             }
             .gus-sms-link:hover {
-                background: #2e7d32;
-                color: white;
+                background: #256b29;
+                color: #000;
             }
             .gus-modal .gus-preview-label {
                 font-size: 13px;
@@ -523,11 +525,17 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                     showSmsModal(phone, contactName, suburb);
                 });
 
-                const phoneIcon = span.querySelector('a[href^="tel:"]');
-                if (phoneIcon) {
-                    phoneIcon.after(smsLink);
+                // Place after the asterisk (primary indicator) if present, else after phone icon
+                const asterisk = span.querySelector('.fa-asterisk');
+                if (asterisk) {
+                    asterisk.after(smsLink);
                 } else {
-                    span.appendChild(smsLink);
+                    const phoneIcon = span.querySelector('a[href^="tel:"]');
+                    if (phoneIcon) {
+                        phoneIcon.after(smsLink);
+                    } else {
+                        span.appendChild(smsLink);
+                    }
                 }
             });
         }
