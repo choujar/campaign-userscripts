@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         List Manager Tweaks
 // @namespace    https://github.com/choujar/campaign-userscripts
-// @version      1.5.2
+// @version      1.5.3
 // @description  UX improvements for List Manager
 // @author       Sahil Choujar
 // @match        https://listmanager.greens.org.au/*
@@ -263,25 +263,14 @@ The election has now been called! We need people to hand out 'How to Vote' cards
 
     function injectButton() {
         const listId = getListId();
-        console.log('[GUS] injectButton called, listId:', listId);
         if (!listId) return;
-
-        // Check if button already exists AND is still in the DOM
-        const existingBtn = document.querySelector('.gus-template-btn');
-        if (existingBtn && document.body.contains(existingBtn)) {
-            console.log('[GUS] Button already exists, skipping');
-            return;
-        }
 
         // Target the h5 heading
         const heading = document.querySelector('h5.MuiTypography-h5');
-        console.log('[GUS] Looking for h5.MuiTypography-h5:', heading);
-        if (!heading) {
-            // Log what headings ARE on the page
-            const allHeadings = document.querySelectorAll('h1, h2, h3, h4, h5, h6');
-            console.log('[GUS] No h5 found. All headings on page:', Array.from(allHeadings).map(h => `${h.tagName}.${h.className} = "${h.textContent.substring(0, 50)}"`));
-            return;
-        }
+        if (!heading) return;
+
+        // Check if THIS heading already has our button
+        if (heading.querySelector('.gus-template-btn')) return;
 
         // Place the button inside the h5 itself so React doesn't wipe it
         // when re-rendering the parent container
@@ -310,11 +299,11 @@ The election has now been called! We need people to hand out 'How to Vote' cards
     // =========================================================================
 
     function injectVersionBadge() {
-        const existing = document.querySelector('.gus-version-badge');
-        if (existing && document.body.contains(existing)) return;
-
         const topBar = document.querySelector('.TopBar-titleText');
         if (!topBar) return;
+
+        // Check if THIS topbar already has our badge
+        if (topBar.parentElement.querySelector('.gus-version-badge')) return;
 
         const container = topBar.parentElement;
         container.style.display = 'flex';
