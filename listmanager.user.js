@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         List Manager Tweaks
 // @namespace    https://github.com/choujar/campaign-userscripts
-// @version      1.8.1
+// @version      1.8.2
 // @description  UX improvements for List Manager and Rocket
 // @author       Sahil Choujar
 // @match        https://listmanager.greens.org.au/*
@@ -517,8 +517,48 @@ The election has now been called! We need people to hand out 'How to Vote' cards
             });
         }
 
-        function geocodeAddress(address, callback) {
-            // Use Nominatim (OpenStreetMap) - free, no API key
+        // Build a list of address variants to try, from most specific to least
+        function buildAddressVariants(rawAddress) {
+            const variants = [];
+            const parts = rawAddress.split(',').map(p => p.trim());
+
+            // Pattern for unit/apartment/flat segments
+            const unitPattern = /^(unit|apartment|apt|flat|suite|ste|level|lvl|lot)\b/i;
+            // Pattern for "3/45" or "Unit 3" prefix on a street part (e.g. "3/45 Smith St")
+            const slashUnitPattern = /^\d+\s*\/\s*(\d+.*)$/;
+
+            // First: filter out standalone unit/apartment parts
+            const cleaned = [];
+            for (const part of parts) {
+                if (unitPattern.test(part)) continue; // skip "Apartment 221" etc
+                // Convert "3/45 Smith St" → "45 Smith St"
+                const slashMatch = part.match(slashUnitPattern);
+                if (slashMatch) {
+                    cleaned.push(slashMatch[1]);
+                } else {
+                    cleaned.push(part);
+                }
+            }
+            const cleanedAddr = cleaned.join(', ');
+            if (cleanedAddr !== rawAddress) {
+                variants.push(cleanedAddr);
+            }
+
+            // Second: just street + suburb + postcode + state (drop any extra address lines)
+            // Find the suburb (uppercase word before a 4-digit postcode)
+            const postcodeIdx = cleaned.findIndex(p => /^\d{4}$/.test(p));
+            if (postcodeIdx >= 1) {
+                // Take from the first part (street) + suburb onward
+                const minimal = [cleaned[0], ...cleaned.slice(postcodeIdx - 1)].join(', ');
+                if (minimal !== cleanedAddr) {
+                    variants.push(minimal);
+                }
+            }
+
+            return variants;
+        }
+
+        function nominatimSearch(address, callback) {
             const query = encodeURIComponent(address + ', South Australia, Australia');
             GM_xmlhttpRequest({
                 method: 'GET',
@@ -530,7 +570,6 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                         if (results.length > 0) {
                             callback(parseFloat(results[0].lat), parseFloat(results[0].lon));
                         } else {
-                            console.log('[GUS] Nominatim: no results for', address);
                             callback(null, null);
                         }
                     } catch (e) {
@@ -543,6 +582,33 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                     callback(null, null);
                 }
             });
+        }
+
+        function geocodeAddress(address, callback) {
+            // Try the raw address first, then cleaned variants
+            const variants = buildAddressVariants(address);
+            const allAttempts = [address, ...variants];
+            let attempt = 0;
+
+            function tryNext() {
+                if (attempt >= allAttempts.length) {
+                    console.log('[GUS] Nominatim: no results after', attempt, 'attempts for', address);
+                    callback(null, null);
+                    return;
+                }
+                const addr = allAttempts[attempt];
+                console.log('[GUS] Nominatim attempt', attempt + 1 + '/' + allAttempts.length + ':', addr);
+                nominatimSearch(addr, (lat, lng) => {
+                    if (lat !== null) {
+                        if (attempt > 0) console.log('[GUS] Nominatim: succeeded on cleaned address:', addr);
+                        callback(lat, lng);
+                    } else {
+                        attempt++;
+                        tryNext();
+                    }
+                });
+            }
+            tryNext();
         }
 
         // Simple point-in-polygon using ray casting (no Google dependency)
