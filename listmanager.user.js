@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         List Manager Tweaks
 // @namespace    https://github.com/choujar/greens-userscripts
-// @version      1.4.0
+// @version      1.4.1
 // @description  UX improvements for List Manager
 // @author       Sahil Choujar
 // @match        https://listmanager.greens.org.au/*
@@ -183,6 +183,11 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                 padding-right: 12px;
                 white-space: nowrap;
                 letter-spacing: 0.3px;
+                text-decoration: none;
+            }
+            .gus-version-badge:hover {
+                color: #666;
+                text-decoration: underline;
             }
             .gus-banner {
                 background: #fff3e0;
@@ -305,9 +310,12 @@ The election has now been called! We need people to hand out 'How to Vote' cards
         container.style.display = 'flex';
         container.style.alignItems = 'center';
 
-        const badge = document.createElement('span');
+        const badge = document.createElement('a');
         badge.className = 'gus-version-badge';
         badge.textContent = 'Tweaks v' + GM_info.script.version;
+        badge.href = 'https://github.com/choujar/greens-userscripts';
+        badge.target = '_blank';
+        badge.rel = 'noopener';
         container.appendChild(badge);
     }
 
