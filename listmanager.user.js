@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         List Manager Tweaks
-// @namespace    https://github.com/choujar/greens-userscripts
-// @version      1.4.2
+// @namespace    https://github.com/choujar/campaign-userscripts
+// @version      1.5.0
 // @description  UX improvements for List Manager
 // @author       Sahil Choujar
 // @match        https://listmanager.greens.org.au/*
@@ -9,8 +9,8 @@
 // @grant        GM_getValue
 // @grant        GM_setValue
 // @grant        GM_info
-// @updateURL    https://raw.githubusercontent.com/choujar/greens-userscripts/main/listmanager.user.js
-// @downloadURL  https://raw.githubusercontent.com/choujar/greens-userscripts/main/listmanager.user.js
+// @updateURL    https://raw.githubusercontent.com/choujar/campaign-userscripts/main/listmanager.user.js
+// @downloadURL  https://raw.githubusercontent.com/choujar/campaign-userscripts/main/listmanager.user.js
 // ==/UserScript==
 
 (function() {
@@ -313,7 +313,7 @@ The election has now been called! We need people to hand out 'How to Vote' cards
         const badge = document.createElement('a');
         badge.className = 'gus-version-badge';
         badge.textContent = 'Tweaks v' + GM_info.script.version;
-        badge.href = 'https://raw.githubusercontent.com/choujar/greens-userscripts/main/listmanager.user.js';
+        badge.href = 'https://raw.githubusercontent.com/choujar/campaign-userscripts/main/listmanager.user.js';
         badge.target = '_blank';
         badge.rel = 'noopener';
         container.appendChild(badge);
