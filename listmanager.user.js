@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         List Manager Tweaks
 // @namespace    https://github.com/choujar/campaign-userscripts
-// @version      1.6.1
+// @version      1.6.2
 // @description  UX improvements for List Manager and Rocket
 // @author       Sahil Choujar
 // @match        https://listmanager.greens.org.au/*
@@ -392,6 +392,13 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                 border-radius: 3px;
                 font-weight: 500;
             }
+            .gus-modal .gus-preview .gus-filled {
+                background: #e8f5e9;
+                color: #2e7d32;
+                padding: 1px 4px;
+                border-radius: 3px;
+                font-weight: 500;
+            }
             .gus-modal .gus-to {
                 font-size: 13px;
                 color: #666;
@@ -454,8 +461,24 @@ The election has now been called! We need people to hand out 'How to Vote' cards
             return filled;
         }
 
-        function highlightPlaceholders(text) {
-            return text.replace(/\[([^\]]+)\]/g, '<span class="gus-placeholder">[$1]</span>');
+        function fillTemplateForPreview(template, name, suburb) {
+            let html = template
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;');
+
+            // Replace known placeholders with filled+highlighted or unfilled+orange
+            html = html.replace(/\[their name\]/gi, name
+                ? `<span class="gus-filled">${name}</span>`
+                : '<span class="gus-placeholder">[their name]</span>');
+            html = html.replace(/\[suburb\]/gi, suburb
+                ? `<span class="gus-filled">${suburb}</span>`
+                : '<span class="gus-placeholder">[suburb]</span>');
+
+            // Any remaining placeholders stay orange
+            html = html.replace(/\[([^\]]+)\]/g, '<span class="gus-placeholder">[$1]</span>');
+
+            return html;
         }
 
         function buildSmsUrl(phoneDigits, message) {
@@ -470,9 +493,7 @@ The election has now been called! We need people to hand out 'How to Vote' cards
             const overlay = document.createElement('div');
             overlay.className = 'gus-overlay';
 
-            const previewHtml = highlightPlaceholders(
-                filled.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-            );
+            const previewHtml = fillTemplateForPreview(template, contactName.preferred, suburb);
 
             overlay.innerHTML = `
                 <div class="gus-modal">
