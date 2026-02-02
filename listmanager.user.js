@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         List Manager Tweaks
 // @namespace    https://github.com/choujar/campaign-userscripts
-// @version      1.7.2
+// @version      1.8.0
 // @description  UX improvements for List Manager and Rocket
 // @author       Sahil Choujar
 // @match        https://listmanager.greens.org.au/*
@@ -517,24 +517,80 @@ The election has now been called! We need people to hand out 'How to Vote' cards
             });
         }
 
-        function findElectorate(address, callback) {
-            // Wait for Google Maps to be available
-            if (typeof google === 'undefined' || !google.maps || !google.maps.Geocoder) {
-                console.log('[GUS] Google Maps not ready, retrying...');
-                setTimeout(() => findElectorate(address, callback), 1000);
-                return;
-            }
+        function geocodeAddress(address, callback) {
+            // Use Nominatim (OpenStreetMap) - free, no API key
+            const query = encodeURIComponent(address + ', South Australia, Australia');
+            GM_xmlhttpRequest({
+                method: 'GET',
+                url: `https://nominatim.openstreetmap.org/search?q=${query}&format=json&limit=1`,
+                headers: { 'User-Agent': 'CampaignUserscripts/1.0' },
+                onload: function(response) {
+                    try {
+                        const results = JSON.parse(response.responseText);
+                        if (results.length > 0) {
+                            callback(parseFloat(results[0].lat), parseFloat(results[0].lon));
+                        } else {
+                            console.log('[GUS] Nominatim: no results for', address);
+                            callback(null, null);
+                        }
+                    } catch (e) {
+                        console.error('[GUS] Nominatim parse error:', e);
+                        callback(null, null);
+                    }
+                },
+                onerror: function(err) {
+                    console.error('[GUS] Nominatim request failed:', err);
+                    callback(null, null);
+                }
+            });
+        }
 
-            const geocoder = new google.maps.Geocoder();
-            geocoder.geocode({ address: address + ', SA, Australia' }, (results, status) => {
-                if (status !== 'OK' || !results[0]) {
-                    console.log('[GUS] Geocode failed:', status);
+        // Simple point-in-polygon using ray casting (no Google dependency)
+        function pointInPolygon(lat, lng, polygon) {
+            let inside = false;
+            for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+                const yi = polygon[i].lat, xi = polygon[i].lng;
+                const yj = polygon[j].lat, xj = polygon[j].lng;
+                const intersect = ((yi > lat) !== (yj > lat)) &&
+                    (lng < (xj - xi) * (lat - yi) / (yj - yi) + xi);
+                if (intersect) inside = !inside;
+            }
+            return inside;
+        }
+
+        // Decode Google's encoded polyline format
+        function decodePolyline(encoded) {
+            const points = [];
+            let index = 0, lat = 0, lng = 0;
+            while (index < encoded.length) {
+                let shift = 0, result = 0, byte;
+                do {
+                    byte = encoded.charCodeAt(index++) - 63;
+                    result |= (byte & 0x1f) << shift;
+                    shift += 5;
+                } while (byte >= 0x20);
+                lat += (result & 1) ? ~(result >> 1) : (result >> 1);
+
+                shift = 0; result = 0;
+                do {
+                    byte = encoded.charCodeAt(index++) - 63;
+                    result |= (byte & 0x1f) << shift;
+                    shift += 5;
+                } while (byte >= 0x20);
+                lng += (result & 1) ? ~(result >> 1) : (result >> 1);
+
+                points.push({ lat: lat / 1e5, lng: lng / 1e5 });
+            }
+            return points;
+        }
+
+        function findElectorate(address, callback) {
+            geocodeAddress(address, (lat, lng) => {
+                if (lat === null) {
                     callback(null);
                     return;
                 }
-
-                const latlng = results[0].geometry.location;
-                console.log('[GUS] Geocoded to:', latlng.lat(), latlng.lng());
+                console.log('[GUS] Geocoded to:', lat, lng);
 
                 loadEcsaData((districts) => {
                     if (!districts) {
@@ -546,19 +602,15 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                         if (district.name === 'All Districts') continue;
 
                         try {
-                            // Decode paths and build polygon
-                            const polygonPaths = district.paths.map(encodedPath =>
-                                google.maps.geometry.encoding.decodePath(encodedPath)
-                            );
-                            const polygon = new google.maps.Polygon({ paths: polygonPaths });
-
-                            if (google.maps.geometry.poly.containsLocation(latlng, polygon)) {
-                                // Title case the district name
-                                const name = district.name.charAt(0).toUpperCase() +
-                                    district.name.slice(1).toLowerCase();
-                                console.log('[GUS] Found electorate:', name);
-                                callback(name);
-                                return;
+                            for (const encodedPath of district.paths) {
+                                const polygon = decodePolyline(encodedPath);
+                                if (pointInPolygon(lat, lng, polygon)) {
+                                    const name = district.name.charAt(0).toUpperCase() +
+                                        district.name.slice(1).toLowerCase();
+                                    console.log('[GUS] Found electorate:', name);
+                                    callback(name);
+                                    return;
+                                }
                             }
                         } catch (e) {
                             // Skip malformed districts
