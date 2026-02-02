@@ -5,15 +5,15 @@ Tampermonkey userscripts for Greens SA campaign platforms (List Manager, Rocket,
 ## Install
 
 1. Install [Tampermonkey](https://www.tampermonkey.net/) in Chrome
-2. Click any `.user.js` file below - Tampermonkey will prompt to install
+2. Click a script link below - Tampermonkey will prompt to install
 3. Scripts auto-update when new versions are pushed
 
 ## Scripts
 
 | Script | Platform | What it does |
 |--------|----------|--------------|
-| [listmanager-pointer-cursor.user.js](listmanager-pointer-cursor.user.js) | List Manager | Adds pointer cursor to clickable rows |
+| [listmanager.user.js](https://raw.githubusercontent.com/choujar/greens-userscripts/main/listmanager.user.js) | List Manager | UX improvements (pointer cursor on rows, more to come) |
 
 ## Contributing
 
-If you have ideas for improvements, let Sahil know or submit a PR.
+Ideas for improvements? Let Sahil know or submit a PR.
