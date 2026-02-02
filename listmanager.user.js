@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         List Manager Tweaks
 // @namespace    https://github.com/choujar/campaign-userscripts
-// @version      1.8.2
+// @version      1.8.3
 // @description  UX improvements for List Manager and Rocket
 // @author       Sahil Choujar
 // @match        https://listmanager.greens.org.au/*
@@ -367,6 +367,25 @@ The election has now been called! We need people to hand out 'How to Vote' cards
             }
             .gus-sms-link:hover {
                 background: #256b29;
+                color: #fff;
+            }
+            .gus-copy-phone {
+                display: inline-block;
+                margin-left: 4px;
+                padding: 2px 8px;
+                font-size: 11px;
+                font-weight: 600;
+                color: #fff;
+                background: #1565c0;
+                border: 1px solid #1565c0;
+                border-radius: 4px;
+                cursor: pointer;
+                text-decoration: none;
+                vertical-align: middle;
+                transition: background 0.15s, color 0.15s;
+            }
+            .gus-copy-phone:hover {
+                background: #0d47a1;
                 color: #fff;
             }
             .gus-modal .gus-preview-label {
@@ -809,12 +828,19 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                         <div class="gus-preview">${previewHtml}</div>
                         <div class="gus-modal-actions">
                             <button class="gus-cancel">Cancel</button>
+                            <button class="gus-copy-sms">Copy SMS</button>
                             <a class="gus-send" href="${buildSmsUrl(phone.digits, filled)}">Send SMS</a>
                         </div>
                     </div>
                 `;
 
                 overlay.querySelector('.gus-cancel').addEventListener('click', () => overlay.remove());
+                overlay.querySelector('.gus-copy-sms').addEventListener('click', (e) => {
+                    navigator.clipboard.writeText(filled).then(() => {
+                        e.target.textContent = 'Copied!';
+                        setTimeout(() => { e.target.textContent = 'Copy SMS'; }, 1500);
+                    });
+                });
                 overlay.querySelector('.gus-send').addEventListener('click', () => {
                     setTimeout(() => overlay.remove(), 300);
                 });
@@ -862,16 +888,32 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                     showSmsModal(phone, contactName, suburb);
                 });
 
+                const copyLink = document.createElement('span');
+                copyLink.className = 'gus-copy-phone';
+                copyLink.textContent = 'Copy';
+                copyLink.title = 'Copy phone number';
+                copyLink.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    navigator.clipboard.writeText(digits).then(() => {
+                        copyLink.textContent = 'Copied!';
+                        setTimeout(() => { copyLink.textContent = 'Copy'; }, 1500);
+                    });
+                });
+
                 // Place after the asterisk (primary indicator) if present, else after phone icon
                 const asterisk = span.querySelector('.fa-asterisk');
                 if (asterisk) {
                     asterisk.after(smsLink);
+                    smsLink.after(copyLink);
                 } else {
                     const phoneIcon = span.querySelector('a[href^="tel:"]');
                     if (phoneIcon) {
                         phoneIcon.after(smsLink);
+                        smsLink.after(copyLink);
                     } else {
                         span.appendChild(smsLink);
+                        span.appendChild(copyLink);
                     }
                 }
             });
