@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         List Manager Tweaks
 // @namespace    https://github.com/choujar/greens-userscripts
-// @version      1.3.0
+// @version      1.4.0
 // @description  UX improvements for List Manager
 // @author       Sahil Choujar
 // @match        https://listmanager.greens.org.au/*
@@ -17,13 +17,17 @@
     'use strict';
 
     // =========================================================================
-    // Pointer cursor on clickable rows
+    // Pointer cursor on name cells only
     // =========================================================================
     GM_addStyle(`
-        .MuiDataGrid-row {
+        .MuiDataGrid-cell[data-field="preferredName"],
+        .MuiDataGrid-cell[data-field="lastName"],
+        .MuiDataGrid-cell[data-field="firstName"] {
             cursor: pointer !important;
         }
-        .MuiDataGrid-row .MuiDataGrid-cell span[role="presentation"] {
+        .MuiDataGrid-cell[data-field="preferredName"] span[role="presentation"],
+        .MuiDataGrid-cell[data-field="lastName"] span[role="presentation"],
+        .MuiDataGrid-cell[data-field="firstName"] span[role="presentation"] {
             cursor: pointer !important;
         }
     `);
@@ -42,7 +46,7 @@ The election has now been called! We need people to hand out 'How to Vote' cards
     }
 
     function getListName() {
-        const heading = document.querySelector('h5, h4, h3');
+        const heading = document.querySelector('h5.MuiTypography-h5');
         return heading ? heading.textContent.trim() : null;
     }
 
@@ -68,18 +72,20 @@ The election has now been called! We need people to hand out 'How to Vote' cards
     function injectStyles() {
         GM_addStyle(`
             .gus-template-btn {
-                display: flex;
+                display: inline-flex;
                 align-items: center;
                 justify-content: center;
-                width: 36px;
-                height: 36px;
+                width: 32px;
+                height: 32px;
                 border: 1px solid #ccc;
                 border-radius: 8px;
                 background: white;
                 cursor: pointer;
-                font-size: 18px;
-                margin-left: 12px;
+                font-size: 16px;
+                margin-left: 10px;
+                vertical-align: middle;
                 transition: background 0.15s, border-color 0.15s;
+                flex-shrink: 0;
             }
             .gus-template-btn:hover {
                 background: #f5f5f5;
@@ -242,45 +248,46 @@ The election has now been called! We need people to hand out 'How to Vote' cards
         overlay.querySelector('#gus-sms-template').focus();
     }
 
-    let templateBtn = null;
-
     function updateButtonState(listId) {
-        if (!templateBtn) return;
+        const btn = document.querySelector('.gus-template-btn');
+        if (!btn) return;
         const hasTemplate = loadTemplate(listId) !== null;
-        templateBtn.classList.toggle('has-template', hasTemplate);
-        templateBtn.title = hasTemplate ? 'Edit SMS template' : 'Set up SMS template';
+        btn.classList.toggle('has-template', hasTemplate);
+        btn.title = hasTemplate ? 'Edit SMS template' : 'Set up SMS template';
     }
 
     function injectButton() {
         const listId = getListId();
         if (!listId) return;
 
-        if (document.querySelector('.gus-template-btn')) return;
+        // Check if button already exists AND is still in the DOM
+        const existingBtn = document.querySelector('.gus-template-btn');
+        if (existingBtn && document.body.contains(existingBtn)) return;
 
-        // Target the h5 heading element (list name like "0202 Boothby All Interested")
+        // Target the h5 heading
         const heading = document.querySelector('h5.MuiTypography-h5');
         if (!heading) return;
 
-        const headingContainer = heading.parentElement;
+        // Place the button inside the h5 itself so React doesn't wipe it
+        // when re-rendering the parent container
+        const btn = document.createElement('button');
+        btn.className = 'gus-template-btn';
+        btn.innerHTML = '&#9881;';
+        btn.title = 'SMS template';
 
-        templateBtn = document.createElement('button');
-        templateBtn.className = 'gus-template-btn';
-        templateBtn.innerHTML = '&#9881;';
-        templateBtn.title = 'SMS template';
+        const hasTemplate = loadTemplate(listId) !== null;
+        btn.classList.toggle('has-template', hasTemplate);
+        btn.title = hasTemplate ? 'Edit SMS template' : 'Set up SMS template';
 
-        updateButtonState(listId);
-
-        templateBtn.addEventListener('click', () => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
             const listName = getListName();
             createModal(listId, listName, false);
         });
 
-        headingContainer.style.display = 'flex';
-        headingContainer.style.alignItems = 'flex-start';
-        headingContainer.style.gap = '10px';
-
-        // Insert after the heading, before the subtitle
-        heading.after(templateBtn);
+        heading.style.display = 'flex';
+        heading.style.alignItems = 'center';
+        heading.appendChild(btn);
     }
 
     // =========================================================================
@@ -288,7 +295,8 @@ The election has now been called! We need people to hand out 'How to Vote' cards
     // =========================================================================
 
     function injectVersionBadge() {
-        if (document.querySelector('.gus-version-badge')) return;
+        const existing = document.querySelector('.gus-version-badge');
+        if (existing && document.body.contains(existing)) return;
 
         const topBar = document.querySelector('.TopBar-titleText');
         if (!topBar) return;
@@ -308,24 +316,14 @@ The election has now been called! We need people to hand out 'How to Vote' cards
     // =========================================================================
 
     let lastListId = getListId();
-    let lastListName = getListName();
 
     function checkListChange() {
         const currentId = getListId();
-        const currentName = getListName();
 
         if (currentId && currentId !== lastListId) {
-            const savedName = GM_getValue(getListNameKey(currentId), null);
-            if (savedName && currentName && savedName !== currentName) {
-                // list changed - next time modal opens it'll show the warning
-            }
             lastListId = currentId;
-            lastListName = currentName;
-
-            // re-inject button for new list
             const oldBtn = document.querySelector('.gus-template-btn');
             if (oldBtn) oldBtn.remove();
-            templateBtn = null;
             injectButton();
         }
     }
