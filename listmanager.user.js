@@ -247,11 +247,11 @@ The election has now been called! We need people to hand out 'How to Vote' cards
 
         if (document.querySelector('.gus-template-btn')) return;
 
-        const tabBar = document.querySelector('.MuiTabs-root') ||
-                       document.querySelector('[role="tablist"]');
-        if (!tabBar) return;
+        // Target the h5 heading element (list name like "0202 Boothby All Interested")
+        const heading = document.querySelector('h5.MuiTypography-h5');
+        if (!heading) return;
 
-        const container = tabBar.closest('.MuiBox-root') || tabBar.parentElement;
+        const headingContainer = heading.parentElement;
 
         templateBtn = document.createElement('button');
         templateBtn.className = 'gus-template-btn';
@@ -262,14 +262,15 @@ The election has now been called! We need people to hand out 'How to Vote' cards
 
         templateBtn.addEventListener('click', () => {
             const listName = getListName();
-            const savedName = GM_getValue(getListNameKey(listId), null);
-            const isNewList = savedName === null && loadTemplate(listId) === null;
             createModal(listId, listName, false);
         });
 
-        container.style.display = 'flex';
-        container.style.alignItems = 'center';
-        container.appendChild(templateBtn);
+        headingContainer.style.display = 'flex';
+        headingContainer.style.alignItems = 'flex-start';
+        headingContainer.style.gap = '10px';
+
+        // Insert after the heading, before the subtitle
+        heading.after(templateBtn);
     }
 
     // =========================================================================
