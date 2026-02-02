@@ -1,6 +1,6 @@
-# Greens Campaign Userscripts
+# Campaign Userscripts
 
-Tampermonkey userscripts for Greens SA campaign platforms (List Manager, Rocket, Lime).
+Tampermonkey userscripts for campaign platforms (List Manager, Rocket, Lime).
 
 ## Install
 
@@ -12,7 +12,7 @@ Tampermonkey userscripts for Greens SA campaign platforms (List Manager, Rocket,
 
 | Script | Platform | What it does |
 |--------|----------|--------------|
-| [listmanager.user.js](https://raw.githubusercontent.com/choujar/greens-userscripts/main/listmanager.user.js) | List Manager | UX improvements (pointer cursor on rows, more to come) |
+| [listmanager.user.js](https://raw.githubusercontent.com/choujar/greens-userscripts/main/listmanager.user.js) | List Manager | UX improvements (pointer cursor on name fields, SMS template manager) |
 
 ## Contributing
 
