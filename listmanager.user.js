@@ -385,16 +385,15 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                 background: #2e7d32;
             }
             .gus-electorate-select {
-                font-size: 24px;
-                font-weight: bold;
-                padding: 2px 8px;
+                font-size: 14px;
+                font-weight: 600;
+                padding: 2px 6px;
                 border: 1px solid #555;
-                border-radius: 6px;
+                border-radius: 4px;
                 background: #2b2b2b;
                 color: #fff;
                 cursor: pointer;
-                vertical-align: baseline;
-                max-width: 280px;
+                vertical-align: middle;
             }
             .gus-electorate-select:hover {
                 border-color: #888;
