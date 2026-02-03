@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         List Manager Tweaks
 // @namespace    https://github.com/choujar/campaign-userscripts
-// @version      1.9.0
+// @version      1.9.1
 // @description  UX improvements for List Manager and Rocket
 // @author       Sahil Choujar
 // @match        https://listmanager.greens.org.au/*
@@ -900,30 +900,18 @@ The election has now been called! We need people to hand out 'How to Vote' cards
 
             const suburb = getSuburb();
 
+            const copySvg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>';
+            const checkSvg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>';
+
             document.querySelectorAll('span[agc-phone]').forEach(span => {
-                if (span.querySelector('.gus-sms-link')) return;
+                if (span.querySelector('.gus-copy-phone')) return;
 
                 const text = span.childNodes[0]?.textContent?.trim();
                 if (!text) return;
 
                 const digits = text.replace(/\s/g, '');
-                if (!/^04\d{8}$/.test(digits)) return;
+                const isMobile = /^04\d{8}$/.test(digits);
 
-                const phone = { display: text, digits: digits };
-
-                const smsLink = document.createElement('span');
-                smsLink.className = 'gus-sms-link';
-                smsLink.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22z"/></svg>';
-                smsLink.title = 'Send SMS to ' + text;
-
-                smsLink.addEventListener('click', (e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    showSmsModal(phone, contactName, suburb);
-                });
-
-                const copySvg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>';
-                const checkSvg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>';
                 const copyLink = document.createElement('span');
                 copyLink.className = 'gus-copy-phone';
                 copyLink.innerHTML = copySvg;
@@ -938,20 +926,29 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                     });
                 });
 
+                let smsLink = null;
+                if (isMobile) {
+                    const phone = { display: text, digits: digits };
+                    smsLink = document.createElement('span');
+                    smsLink.className = 'gus-sms-link';
+                    smsLink.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22z"/></svg>';
+                    smsLink.title = 'Send SMS to ' + text;
+                    smsLink.addEventListener('click', (e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        showSmsModal(phone, contactName, suburb);
+                    });
+                }
+
                 // Place after the asterisk (primary indicator) if present, else after phone icon
                 const asterisk = span.querySelector('.fa-asterisk');
-                if (asterisk) {
-                    asterisk.after(smsLink);
-                    smsLink.after(copyLink);
+                const anchor = asterisk || span.querySelector('a[href^="tel:"]');
+                if (anchor) {
+                    if (smsLink) { anchor.after(smsLink); smsLink.after(copyLink); }
+                    else { anchor.after(copyLink); }
                 } else {
-                    const phoneIcon = span.querySelector('a[href^="tel:"]');
-                    if (phoneIcon) {
-                        phoneIcon.after(smsLink);
-                        smsLink.after(copyLink);
-                    } else {
-                        span.appendChild(smsLink);
-                        span.appendChild(copyLink);
-                    }
+                    if (smsLink) span.appendChild(smsLink);
+                    span.appendChild(copyLink);
                 }
             });
         }
