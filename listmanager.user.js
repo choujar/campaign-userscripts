@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         List Manager Tweaks
 // @namespace    https://github.com/choujar/campaign-userscripts
-// @version      1.9.1
+// @version      1.9.2
 // @description  UX improvements for List Manager and Rocket
 // @author       Sahil Choujar
 // @match        https://listmanager.greens.org.au/*
@@ -1006,15 +1006,38 @@ The election has now been called! We need people to hand out 'How to Vote' cards
             h2.insertBefore(document.createTextNode(' '), select.nextSibling);
         }
 
+        function to12hr(timeStr) {
+            const h = parseInt(timeStr, 10);
+            if (h === 0) return '12am';
+            if (h < 12) return h + 'am';
+            if (h === 12) return '12pm';
+            return (h - 12) + 'pm';
+        }
+
+        function convertShiftTimes() {
+            document.querySelectorAll('.panel-heading.ng-binding').forEach(el => {
+                if (el.dataset.gusConverted) return;
+                const text = el.childNodes[0];
+                if (!text || text.nodeType !== Node.TEXT_NODE) return;
+                const raw = text.textContent.trim();
+                const m = raw.match(/^(\d{1,2}):00\s*-\s*(\d{1,2}):00$/);
+                if (!m) return;
+                text.textContent = to12hr(m[1]) + ' – ' + to12hr(m[2]) + ' ';
+                el.dataset.gusConverted = '1';
+            });
+        }
+
         const rocketObserver = new MutationObserver(() => {
             injectSmsLinks();
             injectElectorateDropdown();
+            convertShiftTimes();
             prefetchElectorate();
         });
         rocketObserver.observe(document.body, { childList: true, subtree: true });
 
         injectSmsLinks();
         injectElectorateDropdown();
+        convertShiftTimes();
         prefetchElectorate();
     }
 
