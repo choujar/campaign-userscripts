@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         List Manager Tweaks
 // @namespace    https://github.com/choujar/campaign-userscripts
-// @version      1.9.6
+// @version      1.9.7
 // @description  UX improvements for List Manager and Rocket
 // @author       Sahil Choujar
 // @match        https://listmanager.greens.org.au/*
@@ -116,6 +116,22 @@
             line-height: 1.4;
         }
     `);
+
+    // =========================================================================
+    // Shared: security & debug helpers
+    // =========================================================================
+    function escapeHtml(str) {
+        return String(str)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;');
+    }
+
+    const GUS_DEBUG = false;
+    function debugLog(...args) {
+        if (GUS_DEBUG) console.log('[GUS]', ...args);
+    }
 
     // =========================================================================
     // Shared: dismiss overlay helper
@@ -239,14 +255,14 @@ The election has now been called! We need people to hand out 'How to Vote' cards
             overlay.innerHTML = `
                 <div class="gus-modal">
                     <h2>Templates</h2>
-                    <div class="gus-list-label">List: ${listName || listId}</div>
+                    <div class="gus-list-label">List: ${escapeHtml(listName || listId)}</div>
                     ${nameChanged ? `
                         <div class="gus-banner">
-                            This is a different list${savedListName ? ` (was: ${savedListName})` : ''}. Check the template is still appropriate.
+                            This is a different list${savedListName ? ` (was: ${escapeHtml(savedListName)})` : ''}. Check the template is still appropriate.
                         </div>
                     ` : ''}
                     <label for="gus-sms-template">SMS Template</label>
-                    <textarea id="gus-sms-template">${template}</textarea>
+                    <textarea id="gus-sms-template">${escapeHtml(template)}</textarea>
                     <div class="gus-modal-actions">
                         <button class="gus-cancel">Cancel</button>
                         <button class="gus-save">Save</button>
@@ -580,13 +596,13 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                         ecsaCallbacks.forEach(cb => cb(ecsaDistricts));
                         ecsaCallbacks = [];
                     } catch (e) {
-                        console.error('[GUS] Failed to parse ECSA data:', e);
+                        debugLog('Failed to parse ECSA data:', e);
                         ecsaCallbacks.forEach(cb => cb(null));
                         ecsaCallbacks = [];
                     }
                 },
                 onerror: function(err) {
-                    console.error('[GUS] Failed to fetch ECSA data:', err);
+                    debugLog('Failed to fetch ECSA data:', err);
                     ecsaCallbacks.forEach(cb => cb(null));
                     ecsaCallbacks = [];
                 }
@@ -667,12 +683,12 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                             callback(null, null);
                         }
                     } catch (e) {
-                        console.error('[GUS] Nominatim parse error:', e);
+                        debugLog('Nominatim parse error:', e);
                         callback(null, null);
                     }
                 },
                 onerror: function(err) {
-                    console.error('[GUS] Nominatim request failed:', err);
+                    debugLog('Nominatim request failed:', err);
                     callback(null, null);
                 }
             });
@@ -686,19 +702,20 @@ The election has now been called! We need people to hand out 'How to Vote' cards
 
             function tryNext() {
                 if (attempt >= allAttempts.length) {
-                    console.log('[GUS] Nominatim: no results after', attempt, 'attempts for', address);
+                    debugLog('Nominatim: no results after', attempt, 'attempts');
                     callback(null, null);
                     return;
                 }
                 const addr = allAttempts[attempt];
-                console.log('[GUS] Nominatim attempt', attempt + 1 + '/' + allAttempts.length + ':', addr);
+                debugLog('Nominatim attempt', attempt + 1 + '/' + allAttempts.length);
                 nominatimSearch(addr, (lat, lng) => {
                     if (lat !== null) {
-                        if (attempt > 0) console.log('[GUS] Nominatim: succeeded on cleaned address:', addr);
+                        if (attempt > 0) debugLog('Nominatim: succeeded on attempt', attempt + 1);
                         callback(lat, lng);
                     } else {
                         attempt++;
-                        tryNext();
+                        // Respect Nominatim's 1 req/sec rate limit
+                        setTimeout(tryNext, 1100);
                     }
                 });
             }
@@ -750,7 +767,7 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                     callback(null);
                     return;
                 }
-                console.log('[GUS] Geocoded to:', lat, lng);
+                debugLog('Geocoded successfully');
 
                 loadEcsaData((districts) => {
                     if (!districts) {
@@ -767,7 +784,7 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                                 if (pointInPolygon(lat, lng, polygon)) {
                                     const name = district.name.charAt(0).toUpperCase() +
                                         district.name.slice(1).toLowerCase();
-                                    console.log('[GUS] Found electorate:', name);
+                                    debugLog('Found electorate:', name);
                                     callback(name);
                                     return;
                                 }
@@ -777,7 +794,7 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                         }
                     }
 
-                    console.log('[GUS] No electorate found for location');
+                    debugLog('No electorate found for location');
                     callback(null);
                 });
             });
@@ -877,13 +894,13 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                 .replace(/>/g, '&gt;');
 
             html = html.replace(/\[their name\]/gi, name
-                ? `<span class="gus-filled">${name}</span>`
+                ? `<span class="gus-filled">${escapeHtml(name)}</span>`
                 : '<span class="gus-placeholder">[their name]</span>');
             html = html.replace(/\[suburb\]/gi, suburb
-                ? `<span class="gus-filled">${suburb}</span>`
+                ? `<span class="gus-filled">${escapeHtml(suburb)}</span>`
                 : '<span class="gus-placeholder">[suburb]</span>');
             html = html.replace(/\[electorate\]/gi, electorate
-                ? `<span class="gus-filled">${electorate}</span>`
+                ? `<span class="gus-filled">${escapeHtml(electorate)}</span>`
                 : '<span class="gus-placeholder">[electorate]</span>');
 
             // Any remaining placeholders stay orange
@@ -930,13 +947,13 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                 overlay.innerHTML = `
                     <div class="gus-modal">
                         <h2>Send SMS</h2>
-                        <div class="gus-to">To: ${contactName.preferred} (${phone.display})</div>
+                        <div class="gus-to">To: ${escapeHtml(contactName.preferred)} (${escapeHtml(phone.display)})</div>
                         <div class="gus-preview-label">Message preview:</div>
                         <div class="gus-preview">${previewHtml}</div>
                         <div class="gus-modal-actions">
                             <button class="gus-cancel">Cancel</button>
                             <button class="gus-copy-sms">Copy SMS</button>
-                            <a class="gus-send" href="${buildSmsUrl(phone.digits, filled)}">Send SMS</a>
+                            <a class="gus-send" href="${escapeHtml(buildSmsUrl(phone.digits, filled))}">Send SMS</a>
                         </div>
                     </div>
                 `;
@@ -1185,18 +1202,19 @@ The election has now been called! We need people to hand out 'How to Vote' cards
 
             let html = '<table class="gus-tasks-table"><thead><tr><th></th>';
             for (const h of data.headers) {
-                html += `<th>${h}</th>`;
+                html += `<th>${escapeHtml(h)}</th>`;
             }
             html += '</tr></thead><tbody>';
 
             for (const election of data.elections) {
-                html += `<tr><td>${election.name}</td>`;
+                html += `<tr><td>${escapeHtml(election.name)}</td>`;
                 for (let i = 0; i < data.headers.length; i++) {
                     const choice = election.statuses[i];
                     if (choice) {
-                        const icon = CHOICE_ICONS[choice] || choice;
-                        const title = CHOICE_TITLES[choice] || choice;
-                        html += `<td title="${title}"><span class="gus-task-${choice}">${icon}</span></td>`;
+                        const safeChoice = /^[A-Z]$/.test(choice) ? choice : 'X';
+                        const icon = CHOICE_ICONS[safeChoice] || '?';
+                        const title = CHOICE_TITLES[safeChoice] || 'Unknown';
+                        html += `<td title="${escapeHtml(title)}"><span class="gus-task-${safeChoice}">${escapeHtml(icon)}</span></td>`;
                     } else {
                         html += '<td></td>';
                     }
