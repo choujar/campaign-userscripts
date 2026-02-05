@@ -578,13 +578,16 @@ The election has now been called! We need people to hand out 'How to Vote' cards
         }
 
         function checkDoNotSms() {
+            // Angular ng-show/ng-if only renders when the flag is truthy
             const ngEls = document.querySelectorAll('[ng-show*="do_not"], [ng-if*="do_not"]');
             for (const el of ngEls) {
                 if (el.offsetParent !== null) return true;
             }
-            const labels = document.querySelectorAll('label, .label, .badge, .tag');
-            for (const el of labels) {
-                if (/do.not.(sms|call|text|contact)/i.test(el.textContent)) return true;
+            // Checked checkboxes with "do not" labels
+            const checkboxes = document.querySelectorAll('input[type="checkbox"]:checked');
+            for (const cb of checkboxes) {
+                const label = cb.closest('label') || (cb.id && document.querySelector('label[for="' + cb.id + '"]'));
+                if (label && /do.not.(sms|call|text|contact)/i.test(label.textContent)) return true;
             }
             return false;
         }
