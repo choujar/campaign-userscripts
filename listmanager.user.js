@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         List Manager Tweaks
 // @namespace    https://github.com/choujar/campaign-userscripts
-// @version      1.9.5
+// @version      1.9.6
 // @description  UX improvements for List Manager and Rocket
 // @author       Sahil Choujar
 // @match        https://listmanager.greens.org.au/*
@@ -598,37 +598,55 @@ The election has now been called! We need people to hand out 'How to Vote' cards
             const variants = [];
             const parts = rawAddress.split(',').map(p => p.trim());
 
-            // Pattern for unit/apartment/flat segments
+            // Pattern for standalone unit/apartment/flat segments
             const unitPattern = /^(unit|apartment|apt|flat|suite|ste|level|lvl|lot)\b/i;
-            // Pattern for "3/45" or "Unit 3" prefix on a street part (e.g. "3/45 Smith St")
-            const slashUnitPattern = /^\d+\s*\/\s*(\d+.*)$/;
+            // Pattern for slash-separated units: "3/45 ...", "U304 / 112 ...", "A2/5 ..."
+            const slashUnitPattern = /^[A-Za-z]?\d+\s*\/\s*(\d+.*)$/;
+            // Pattern for "Unit 3, 45 Smith St" where unit is part of the street segment
+            const unitPrefixPattern = /^(unit|u|apt|flat|lot|ste|suite|level|lvl)\s*\.?\s*\d+\s*[,/]\s*(\d+.*)$/i;
 
-            // First: filter out standalone unit/apartment parts
+            // First: filter out standalone unit/apartment parts and clean unit prefixes
             const cleaned = [];
             for (const part of parts) {
                 if (unitPattern.test(part)) continue; // skip "Apartment 221" etc
-                // Convert "3/45 Smith St" → "45 Smith St"
+                // Convert "U304/112 South Terrace" or "3/45 Smith St" → "112 South Terrace" / "45 Smith St"
                 const slashMatch = part.match(slashUnitPattern);
                 if (slashMatch) {
-                    cleaned.push(slashMatch[1]);
-                } else {
-                    cleaned.push(part);
+                    cleaned.push(slashMatch[1].trim());
+                    continue;
                 }
+                // Convert "Unit 3, 45 Smith St" → "45 Smith St"
+                const unitPrefixMatch = part.match(unitPrefixPattern);
+                if (unitPrefixMatch) {
+                    cleaned.push(unitPrefixMatch[2].trim());
+                    continue;
+                }
+                cleaned.push(part);
             }
             const cleanedAddr = cleaned.join(', ');
             if (cleanedAddr !== rawAddress) {
                 variants.push(cleanedAddr);
             }
 
-            // Second: just street + suburb + postcode + state (drop any extra address lines)
-            // Find the suburb (uppercase word before a 4-digit postcode)
+            // Second: just street + suburb + postcode + state
             const postcodeIdx = cleaned.findIndex(p => /^\d{4}$/.test(p));
             if (postcodeIdx >= 1) {
-                // Take from the first part (street) + suburb onward
                 const minimal = [cleaned[0], ...cleaned.slice(postcodeIdx - 1)].join(', ');
                 if (minimal !== cleanedAddr) {
                     variants.push(minimal);
                 }
+            }
+
+            // Third: street + suburb only (no postcode/state, Nominatim is forgiving)
+            if (postcodeIdx >= 2) {
+                const streetSuburb = cleaned[0] + ', ' + cleaned[postcodeIdx - 1];
+                variants.push(streetSuburb);
+            }
+
+            // Fourth: just suburb + postcode + state (drop street entirely)
+            if (postcodeIdx >= 1) {
+                const suburbOnly = cleaned.slice(postcodeIdx - 1).join(', ');
+                variants.push(suburbOnly);
             }
 
             return variants;
@@ -831,8 +849,16 @@ The election has now been called! We need people to hand out 'How to Vote' cards
             return shared || DEFAULT_TEMPLATE_ROCKET;
         }
 
+        function sameIgnoreCase(a, b) {
+            return a && b && a.toLowerCase() === b.toLowerCase();
+        }
+
         function fillTemplate(template, name, suburb, electorate) {
             let filled = template;
+            // If electorate and suburb are the same, collapse "[electorate] ([suburb])" to just "[electorate]"
+            if (sameIgnoreCase(electorate, suburb)) {
+                filled = filled.replace(/\[electorate\]\s*\(\s*\[suburb\]\s*\)/gi, '[electorate]');
+            }
             filled = filled.replace(/\[their name\]/gi, name || '[their name]');
             filled = filled.replace(/\[suburb\]/gi, suburb || '[suburb]');
             filled = filled.replace(/\[electorate\]/gi, electorate || '[electorate]');
@@ -840,7 +866,12 @@ The election has now been called! We need people to hand out 'How to Vote' cards
         }
 
         function fillTemplateForPreview(template, name, suburb, electorate) {
-            let html = template
+            let tmpl = template;
+            // Collapse duplicate electorate/suburb before escaping
+            if (sameIgnoreCase(electorate, suburb)) {
+                tmpl = tmpl.replace(/\[electorate\]\s*\(\s*\[suburb\]\s*\)/gi, '[electorate]');
+            }
+            let html = tmpl
                 .replace(/&/g, '&amp;')
                 .replace(/</g, '&lt;')
                 .replace(/>/g, '&gt;');
