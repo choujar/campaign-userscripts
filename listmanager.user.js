@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         List Manager Tweaks
 // @namespace    https://github.com/choujar/campaign-userscripts
-// @version      1.9.4
+// @version      1.9.5
 // @description  UX improvements for List Manager and Rocket
 // @author       Sahil Choujar
 // @match        https://listmanager.greens.org.au/*
@@ -495,9 +495,16 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                 font-weight: 500;
                 color: #ddd;
             }
-            .gus-tasks-table .gus-task-check {
-                color: #5bc0de;
-            }
+            .gus-task-E { color: #5bc0de; }
+            .gus-task-Y { color: #5cb85c; }
+            .gus-task-D { color: #5cb85c; }
+            .gus-task-R { color: #5cb85c; }
+            .gus-task-L { color: #5bc0de; }
+            .gus-task-T { color: #f0ad4e; }
+            .gus-task-I { color: #999; }
+            .gus-task-U { color: #999; }
+            .gus-task-N { color: #d9534f; }
+            .gus-task-X { color: #d9534f; }
         `);
 
         const DEFAULT_TEMPLATE_ROCKET = `Hi [their name], this is [your name] from the SA Greens.
@@ -1158,7 +1165,7 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                     if (choice) {
                         const icon = CHOICE_ICONS[choice] || choice;
                         const title = CHOICE_TITLES[choice] || choice;
-                        html += `<td title="${title}"><span class="gus-task-check">${icon}</span></td>`;
+                        html += `<td title="${title}"><span class="gus-task-${choice}">${icon}</span></td>`;
                     } else {
                         html += '<td></td>';
                     }
