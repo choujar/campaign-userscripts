@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         List Manager Tweaks
 // @namespace    https://github.com/choujar/campaign-userscripts
-// @version      1.9.7
+// @version      1.9.8
 // @description  UX improvements for List Manager and Rocket
 // @author       Sahil Choujar
 // @match        https://listmanager.greens.org.au/*
@@ -370,6 +370,12 @@ The election has now been called! We need people to hand out 'How to Vote' cards
             .gus-sms-link:hover {
                 background: #256b29;
             }
+            .gus-sms-link.gus-sms-warn {
+                background: #d32f2f;
+            }
+            .gus-sms-link.gus-sms-warn:hover {
+                background: #b71c1c;
+            }
             .gus-copy-phone {
                 background: #1565c0;
                 color: #fff;
@@ -459,6 +465,31 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                 color: #666;
                 margin-bottom: 16px;
             }
+            .gus-name-row {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                margin-bottom: 12px;
+            }
+            .gus-name-row label {
+                font-size: 13px;
+                font-weight: 500;
+                color: #555;
+                white-space: nowrap;
+                margin: 0;
+            }
+            .gus-name-row input {
+                flex: 1;
+                padding: 4px 8px;
+                border: 1px solid #ccc;
+                border-radius: 4px;
+                font-size: 14px;
+                font-family: inherit;
+            }
+            .gus-name-row input:focus {
+                outline: none;
+                border-color: #2e7d32;
+            }
             .gus-tasks-table-wrap {
                 margin-top: 4px;
                 padding: 0 15px;
@@ -545,6 +576,20 @@ The election has now been called! We need people to hand out 'How to Vote' cards
             }
             return null;
         }
+
+        function checkDoNotSms() {
+            const ngEls = document.querySelectorAll('[ng-show*="do_not"], [ng-if*="do_not"]');
+            for (const el of ngEls) {
+                if (el.offsetParent !== null) return true;
+            }
+            const labels = document.querySelectorAll('label, .label, .badge, .tag');
+            for (const el of labels) {
+                if (/do.not.(sms|call|text|contact)/i.test(el.textContent)) return true;
+            }
+            return false;
+        }
+
+        function getYourName() { return GM_getValue('gus_your_name', null); }
 
         // electorate lookup
 
@@ -849,21 +894,20 @@ The election has now been called! We need people to hand out 'How to Vote' cards
             return a && b && a.toLowerCase() === b.toLowerCase();
         }
 
-        function fillTemplate(template, name, suburb, electorate) {
+        function fillTemplate(template, name, suburb, electorate, yourName) {
             let filled = template;
-            // If electorate and suburb are the same, collapse "[electorate] ([suburb])" to just "[electorate]"
             if (sameIgnoreCase(electorate, suburb)) {
                 filled = filled.replace(/\[electorate\]\s*\(\s*\[suburb\]\s*\)/gi, '[electorate]');
             }
             filled = filled.replace(/\[their name\]/gi, name || '[their name]');
+            filled = filled.replace(/\[your name\]/gi, yourName || '[your name]');
             filled = filled.replace(/\[suburb\]/gi, suburb || '[suburb]');
             filled = filled.replace(/\[electorate\]/gi, electorate || '[electorate]');
             return filled;
         }
 
-        function fillTemplateForPreview(template, name, suburb, electorate) {
+        function fillTemplateForPreview(template, name, suburb, electorate, yourName) {
             let tmpl = template;
-            // Collapse duplicate electorate/suburb before escaping
             if (sameIgnoreCase(electorate, suburb)) {
                 tmpl = tmpl.replace(/\[electorate\]\s*\(\s*\[suburb\]\s*\)/gi, '[electorate]');
             }
@@ -875,6 +919,9 @@ The election has now been called! We need people to hand out 'How to Vote' cards
             html = html.replace(/\[their name\]/gi, name
                 ? `<span class="gus-filled">${escapeHtml(name)}</span>`
                 : '<span class="gus-placeholder">[their name]</span>');
+            html = html.replace(/\[your name\]/gi, yourName
+                ? `<span class="gus-filled">${escapeHtml(yourName)}</span>`
+                : '<span class="gus-placeholder">[your name]</span>');
             html = html.replace(/\[suburb\]/gi, suburb
                 ? `<span class="gus-filled">${escapeHtml(suburb)}</span>`
                 : '<span class="gus-placeholder">[suburb]</span>');
@@ -882,7 +929,6 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                 ? `<span class="gus-filled">${escapeHtml(electorate)}</span>`
                 : '<span class="gus-placeholder">[electorate]</span>');
 
-            // Any remaining placeholders stay orange
             html = html.replace(/\[([^\]]+)\]/g, '<span class="gus-placeholder">[$1]</span>');
 
             return html;
@@ -913,20 +959,41 @@ The election has now been called! We need people to hand out 'How to Vote' cards
         }
 
         function showSmsModal(phone, contactName, suburb) {
-            // Show modal immediately with loading state for electorate
             const template = getRocketTemplate();
+            const showNameInput = /\[your name\]/i.test(template);
+            let yourName = getYourName();
 
             const overlay = document.createElement('div');
             overlay.className = 'gus-overlay';
+            let currentElectorate = null;
+
+            function updatePreview() {
+                const filled = fillTemplate(template, contactName.preferred, suburb, currentElectorate, yourName);
+                const previewHtml = fillTemplateForPreview(template, contactName.preferred, suburb, currentElectorate, yourName);
+                const preview = overlay.querySelector('.gus-preview');
+                const sendLink = overlay.querySelector('.gus-send');
+                if (preview) preview.innerHTML = previewHtml;
+                if (sendLink) sendLink.href = buildSmsUrl(phone.digits, filled);
+            }
 
             function renderModal(electorate) {
-                const filled = fillTemplate(template, contactName.preferred, suburb, electorate);
-                const previewHtml = fillTemplateForPreview(template, contactName.preferred, suburb, electorate);
+                currentElectorate = electorate;
+                const nameInputVal = overlay.querySelector('.gus-your-name-input');
+                if (nameInputVal) yourName = nameInputVal.value.trim() || null;
+
+                const filled = fillTemplate(template, contactName.preferred, suburb, electorate, yourName);
+                const previewHtml = fillTemplateForPreview(template, contactName.preferred, suburb, electorate, yourName);
 
                 overlay.innerHTML = `
                     <div class="gus-modal">
                         <h2>Send SMS</h2>
                         <div class="gus-to">To: ${escapeHtml(contactName.preferred)} (${escapeHtml(phone.display)})</div>
+                        ${showNameInput ? `
+                            <div class="gus-name-row">
+                                <label>Your name:</label>
+                                <input type="text" class="gus-your-name-input" value="${escapeHtml(yourName || '')}" placeholder="Enter your name">
+                            </div>
+                        ` : ''}
                         <div class="gus-preview-label">Message preview:</div>
                         <div class="gus-preview">${previewHtml}</div>
                         <div class="gus-modal-actions">
@@ -939,7 +1006,8 @@ The election has now been called! We need people to hand out 'How to Vote' cards
 
                 overlay.querySelector('.gus-cancel').addEventListener('click', () => overlay.remove());
                 overlay.querySelector('.gus-copy-sms').addEventListener('click', (e) => {
-                    copyToClipboard(filled).then(() => {
+                    const currentFilled = fillTemplate(template, contactName.preferred, suburb, currentElectorate, yourName);
+                    copyToClipboard(currentFilled).then(() => {
                         e.target.textContent = 'Copied!';
                         setTimeout(() => { e.target.textContent = 'Copy SMS'; }, 1500);
                     });
@@ -947,15 +1015,22 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                 overlay.querySelector('.gus-send').addEventListener('click', () => {
                     setTimeout(() => overlay.remove(), 300);
                 });
+
+                const nameInput = overlay.querySelector('.gus-your-name-input');
+                if (nameInput) {
+                    nameInput.addEventListener('input', () => {
+                        yourName = nameInput.value.trim() || null;
+                        if (yourName) GM_setValue('gus_your_name', yourName);
+                        updatePreview();
+                    });
+                    if (!yourName) nameInput.focus();
+                }
             }
 
             dismissOnEscapeOrClickOutside(overlay);
-
-            // Render immediately without electorate
             renderModal(null);
             document.body.appendChild(overlay);
 
-            // Then look up electorate and re-render
             getElectorateForContact((electorate) => {
                 if (electorate && document.body.contains(overlay)) {
                     renderModal(electorate);
@@ -998,10 +1073,11 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                 let smsLink = null;
                 if (isMobile) {
                     const phone = { display: text, digits: digits };
+                    const doNotSms = checkDoNotSms();
                     smsLink = document.createElement('span');
-                    smsLink.className = 'gus-sms-link';
+                    smsLink.className = 'gus-sms-link' + (doNotSms ? ' gus-sms-warn' : '');
                     smsLink.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22z"/></svg>';
-                    smsLink.title = 'Send SMS to ' + text;
+                    smsLink.title = doNotSms ? '\u26a0 Do Not SMS — ' + text : 'Send SMS to ' + text;
                     smsLink.addEventListener('click', (e) => {
                         e.preventDefault();
                         e.stopPropagation();
