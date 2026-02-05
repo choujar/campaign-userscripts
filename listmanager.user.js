@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         List Manager Tweaks
 // @namespace    https://github.com/choujar/campaign-userscripts
-// @version      1.9.2
+// @version      1.9.3
 // @description  UX improvements for List Manager and Rocket
 // @author       Sahil Choujar
 // @match        https://listmanager.greens.org.au/*
@@ -461,6 +461,45 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                 font-size: 13px;
                 color: #666;
                 margin-bottom: 16px;
+            }
+            .gus-tasks-row {
+                margin-top: 2px;
+            }
+            .gus-tasks-row label {
+                font-weight: bold;
+                margin-right: 4px;
+            }
+            .gus-task-badges {
+                display: inline;
+            }
+            .gus-task-badge {
+                display: inline-block;
+                font-size: 11px;
+                padding: 1px 6px;
+                border-radius: 3px;
+                margin-right: 4px;
+                margin-bottom: 2px;
+                font-weight: 500;
+            }
+            .gus-task-badge.choice-E {
+                background: #e3f2fd;
+                color: #1565c0;
+            }
+            .gus-task-badge.choice-T {
+                background: #fff3e0;
+                color: #e65100;
+            }
+            .gus-task-badge.choice-Y {
+                background: #e8f5e9;
+                color: #2e7d32;
+            }
+            .gus-task-badge.choice-N {
+                background: #fce4ec;
+                color: #c62828;
+            }
+            .gus-task-badge.choice-default {
+                background: #f5f5f5;
+                color: #666;
             }
         `);
 
@@ -1027,11 +1066,81 @@ The election has now been called! We need people to hand out 'How to Vote' cards
             });
         }
 
+        const CHOICE_LABELS = {
+            E: 'Interested',
+            T: 'Tentative',
+            Y: 'Yes',
+            L: 'Likely',
+            U: 'Unlikely',
+            N: 'No',
+            I: 'Invited',
+            D: 'Done',
+            R: 'Rostered',
+            X: 'Cancelled',
+        };
+
+        function extractTaskData() {
+            const tasks = [];
+            document.querySelectorAll('tr[ng-repeat*="readable_task_elections"] td[ng-repeat*="task_codes"]').forEach(td => {
+                const titleAttr = td.getAttribute('title');
+                if (!titleAttr || !titleAttr.trim().startsWith('{')) return;
+                try {
+                    const data = JSON.parse(titleAttr.replace(/&quot;/g, '"'));
+                    if (data.choice && data.label) {
+                        // Extract short label: "SA26 Doorknocking" → "Doorknocking"
+                        const shortLabel = data.label.replace(/^SA\d+\s+/i, '');
+                        tasks.push({
+                            label: shortLabel,
+                            kind: data.kind,
+                            choice: data.choice,
+                            fullLabel: data.label,
+                        });
+                    }
+                } catch (e) {
+                    // skip malformed title
+                }
+            });
+            return tasks;
+        }
+
+        function injectTaskSummary() {
+            const panelBody = document.querySelector('.panel-body');
+            if (!panelBody) return;
+            if (panelBody.querySelector('.gus-tasks-row')) return;
+
+            const tasks = extractTaskData();
+            if (tasks.length === 0) return;
+
+            const row = document.createElement('p');
+            row.className = 'col-md-12 gus-tasks-row';
+
+            const label = document.createElement('label');
+            label.textContent = 'Activities:';
+            row.appendChild(label);
+
+            const badges = document.createElement('span');
+            badges.className = 'gus-task-badges';
+
+            for (const task of tasks) {
+                const badge = document.createElement('span');
+                const choiceClass = CHOICE_LABELS[task.choice] ? 'choice-' + task.choice : 'choice-default';
+                badge.className = 'gus-task-badge ' + choiceClass;
+                const statusText = CHOICE_LABELS[task.choice] || task.choice;
+                badge.textContent = task.label + ' · ' + statusText;
+                badge.title = task.fullLabel + ' — ' + statusText;
+                badges.appendChild(badge);
+            }
+
+            row.appendChild(badges);
+            panelBody.appendChild(row);
+        }
+
         const rocketObserver = new MutationObserver(() => {
             injectSmsLinks();
             injectElectorateDropdown();
             convertShiftTimes();
             prefetchElectorate();
+            injectTaskSummary();
         });
         rocketObserver.observe(document.body, { childList: true, subtree: true });
 
@@ -1039,6 +1148,7 @@ The election has now been called! We need people to hand out 'How to Vote' cards
         injectElectorateDropdown();
         convertShiftTimes();
         prefetchElectorate();
+        injectTaskSummary();
     }
 
 })();
