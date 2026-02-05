@@ -21,9 +21,7 @@
     const IS_LISTMANAGER = location.hostname === 'listmanager.greens.org.au';
     const IS_ROCKET = location.hostname === 'contact-sa.greens.org.au';
 
-    // =========================================================================
-    // Shared styles
-    // =========================================================================
+    // --- styles ---
     GM_addStyle(`
         .gus-overlay {
             position: fixed;
@@ -117,25 +115,12 @@
         }
     `);
 
-    // =========================================================================
-    // Shared: security & debug helpers
-    // =========================================================================
-    function escapeHtml(str) {
-        return String(str)
-            .replace(/&/g, '&amp;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;')
-            .replace(/"/g, '&quot;');
+    function escapeHtml(s) {
+        return ('' + s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
     }
 
     const GUS_DEBUG = false;
-    function debugLog(...args) {
-        if (GUS_DEBUG) console.log('[GUS]', ...args);
-    }
-
-    // =========================================================================
-    // Shared: dismiss overlay helper
-    // =========================================================================
+    function debugLog(...args) { if (GUS_DEBUG) console.log('[GUS]', ...args); }
     function dismissOnEscapeOrClickOutside(overlay) {
         overlay.addEventListener('click', (e) => {
             if (e.target === overlay) overlay.remove();
@@ -148,9 +133,7 @@
         });
     }
 
-    // =========================================================================
-    // LIST MANAGER features
-    // =========================================================================
+    // --- List Manager ---
     if (IS_LISTMANAGER) {
 
         // --- Pointer cursor on name cells only ---
@@ -359,9 +342,7 @@ The election has now been called! We need people to hand out 'How to Vote' cards
         injectVersionBadge();
     }
 
-    // =========================================================================
-    // ROCKET features (inside iframe)
-    // =========================================================================
+    // --- Rocket ---
     if (IS_ROCKET) {
 
         GM_addStyle(`
@@ -565,9 +546,7 @@ The election has now been called! We need people to hand out 'How to Vote' cards
             return null;
         }
 
-        // =================================================================
-        // Electorate lookup via ECSA polygon data
-        // =================================================================
+        // electorate lookup
 
         let ecsaDistricts = null; // cached polygon data
         let ecsaLoading = false;
