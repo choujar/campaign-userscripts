@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         List Manager Tweaks
 // @namespace    https://github.com/choujar/campaign-userscripts
-// @version      1.10.5
+// @version      1.10.6
 // @description  UX improvements for List Manager and Rocket
 // @author       Sahil Choujar
 // @match        https://listmanager.greens.org.au/*
@@ -243,7 +243,8 @@
                 background: #fafafa;
                 border-radius: 8px;
                 padding: 16px 20px;
-                margin: 0 0 0 16px;
+                margin-left: auto;
+                margin-right: 16px;
                 min-width: 180px;
                 display: flex;
                 flex-direction: column;
