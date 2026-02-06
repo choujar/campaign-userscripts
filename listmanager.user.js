@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         List Manager Tweaks
 // @namespace    https://github.com/choujar/campaign-userscripts
-// @version      1.10.2
+// @version      1.10.3
 // @description  UX improvements for List Manager and Rocket
 // @author       Sahil Choujar
 // @match        https://listmanager.greens.org.au/*
@@ -29,13 +29,17 @@
     // Capture Bearer token via: 1) localStorage (Auth0 cache), 2) fetch/XHR interception
     let capturedJwt = null;
 
+    // Access the page's real window (not Tampermonkey's sandbox)
+    const pageWindow = typeof unsafeWindow !== 'undefined' ? unsafeWindow : window;
+
     function scanLocalStorageForJwt() {
         try {
+            const ls = pageWindow.localStorage;
             const allKeys = [];
-            for (let i = 0; i < localStorage.length; i++) {
-                allKeys.push(localStorage.key(i));
+            for (let i = 0; i < ls.length; i++) {
+                allKeys.push(ls.key(i));
             }
-            console.log('[GUS] localStorage keys:', allKeys);
+            console.log('[GUS] page localStorage keys:', allKeys);
 
             const authKeys = allKeys.filter(k => k && (
                 k.includes('auth0') || k.includes('token') || k.includes('jwt') || k.includes('access')
@@ -43,7 +47,7 @@
             console.log('[GUS] Auth-related keys:', authKeys);
 
             for (const key of authKeys) {
-                const raw = localStorage.getItem(key);
+                const raw = ls.getItem(key);
                 try {
                     const data = JSON.parse(raw);
                     console.log('[GUS] Key:', key, '→ structure:', Object.keys(data), data.body ? 'has body → ' + Object.keys(data.body) : 'no body');
@@ -68,21 +72,13 @@
         // Try localStorage first (catches tokens from before script loaded)
         capturedJwt = scanLocalStorageForJwt();
 
-        // Also intercept future fetch/XHR calls for token refresh
-        const origFetch = window.fetch;
-        window.fetch = function(input, init) {
+        // Intercept the PAGE's fetch/XHR (not the sandbox's)
+        const origFetch = pageWindow.fetch;
+        pageWindow.fetch = function(input, init) {
             try {
                 const url = typeof input === 'string' ? input : (input?.url || '');
                 if (url.includes('listmanager') || url.includes('auth0')) {
                     console.log('[GUS] fetch intercepted:', url.substring(0, 120));
-                    const hdrs = init?.headers;
-                    if (hdrs) {
-                        if (hdrs instanceof Headers) {
-                            console.log('[GUS] fetch headers (Headers obj):', [...hdrs.entries()].map(([k]) => k));
-                        } else {
-                            console.log('[GUS] fetch headers keys:', Object.keys(hdrs));
-                        }
-                    }
                 }
                 const authHeader = init?.headers?.Authorization
                     || init?.headers?.authorization
@@ -95,19 +91,19 @@
             return origFetch.apply(this, arguments);
         };
 
-        const origXhrOpen = XMLHttpRequest.prototype.open;
-        const origXhrSetHeader = XMLHttpRequest.prototype.setRequestHeader;
-        XMLHttpRequest.prototype.open = function(method, url) {
+        const origXhrOpen = pageWindow.XMLHttpRequest.prototype.open;
+        const origXhrSetHeader = pageWindow.XMLHttpRequest.prototype.setRequestHeader;
+        pageWindow.XMLHttpRequest.prototype.open = function(method, url) {
             this._gusUrl = url;
             return origXhrOpen.apply(this, arguments);
         };
-        XMLHttpRequest.prototype.setRequestHeader = function(name, value) {
+        pageWindow.XMLHttpRequest.prototype.setRequestHeader = function(name, value) {
             try {
                 if ((name === 'Authorization' || name === 'authorization') &&
                     value.startsWith('Bearer ') &&
                     this._gusUrl && this._gusUrl.includes('api.listmanager.greens.org.au')) {
                     capturedJwt = value.replace('Bearer ', '');
-                    debugLog('JWT captured from XHR');
+                    console.log('[GUS] JWT captured from XHR!');
                 }
             } catch (e) {}
             return origXhrSetHeader.apply(this, arguments);
