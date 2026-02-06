@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         List Manager Tweaks
 // @namespace    https://github.com/choujar/campaign-userscripts
-// @version      1.10.1
+// @version      1.10.2
 // @description  UX improvements for List Manager and Rocket
 // @author       Sahil Choujar
 // @match        https://listmanager.greens.org.au/*
@@ -31,20 +31,35 @@
 
     function scanLocalStorageForJwt() {
         try {
+            const allKeys = [];
             for (let i = 0; i < localStorage.length; i++) {
-                const key = localStorage.key(i);
-                if (key && key.startsWith('@@auth0spajs@@')) {
-                    const raw = localStorage.getItem(key);
+                allKeys.push(localStorage.key(i));
+            }
+            console.log('[GUS] localStorage keys:', allKeys);
+
+            const authKeys = allKeys.filter(k => k && (
+                k.includes('auth0') || k.includes('token') || k.includes('jwt') || k.includes('access')
+            ));
+            console.log('[GUS] Auth-related keys:', authKeys);
+
+            for (const key of authKeys) {
+                const raw = localStorage.getItem(key);
+                try {
                     const data = JSON.parse(raw);
+                    console.log('[GUS] Key:', key, '→ structure:', Object.keys(data), data.body ? 'has body → ' + Object.keys(data.body) : 'no body');
                     const token = data?.body?.access_token;
                     if (token) {
-                        debugLog('JWT found in localStorage:', key);
+                        console.log('[GUS] JWT found in key:', key);
                         return token;
                     }
+                } catch (e) {
+                    console.log('[GUS] Key:', key, '→ not JSON, value preview:', raw?.substring(0, 100));
                 }
             }
+
+            console.log('[GUS] No JWT found in localStorage');
         } catch (e) {
-            debugLog('localStorage JWT scan error:', e);
+            console.log('[GUS] localStorage scan error:', e);
         }
         return null;
     }
@@ -58,12 +73,23 @@
         window.fetch = function(input, init) {
             try {
                 const url = typeof input === 'string' ? input : (input?.url || '');
+                if (url.includes('listmanager') || url.includes('auth0')) {
+                    console.log('[GUS] fetch intercepted:', url.substring(0, 120));
+                    const hdrs = init?.headers;
+                    if (hdrs) {
+                        if (hdrs instanceof Headers) {
+                            console.log('[GUS] fetch headers (Headers obj):', [...hdrs.entries()].map(([k]) => k));
+                        } else {
+                            console.log('[GUS] fetch headers keys:', Object.keys(hdrs));
+                        }
+                    }
+                }
                 const authHeader = init?.headers?.Authorization
                     || init?.headers?.authorization
                     || (init?.headers instanceof Headers ? init.headers.get('Authorization') : null);
                 if (authHeader && authHeader.startsWith('Bearer ') && url.includes('api.listmanager.greens.org.au')) {
                     capturedJwt = authHeader.replace('Bearer ', '');
-                    debugLog('JWT captured from fetch');
+                    console.log('[GUS] JWT captured from fetch!');
                 }
             } catch (e) {}
             return origFetch.apply(this, arguments);
