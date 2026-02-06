@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         List Manager Tweaks
 // @namespace    https://github.com/choujar/campaign-userscripts
-// @version      1.9.10
+// @version      1.10.0
 // @description  UX improvements for List Manager and Rocket
 // @author       Sahil Choujar
 // @match        https://listmanager.greens.org.au/*
@@ -11,6 +11,7 @@
 // @grant        GM_setValue
 // @grant        GM_info
 // @grant        GM_xmlhttpRequest
+// @connect      api.listmanager.greens.org.au
 // @updateURL    https://raw.githubusercontent.com/choujar/campaign-userscripts/main/listmanager.user.js
 // @downloadURL  https://raw.githubusercontent.com/choujar/campaign-userscripts/main/listmanager.user.js
 // ==/UserScript==
@@ -20,6 +21,47 @@
 
     const IS_LISTMANAGER = location.hostname === 'listmanager.greens.org.au';
     const IS_ROCKET = location.hostname === 'contact-sa.greens.org.au';
+
+    const GUS_DEBUG = false;
+    function debugLog(...args) { if (GUS_DEBUG) console.log('[GUS]', ...args); }
+
+    // --- JWT token interception ---
+    // Capture Bearer token from the app's own API calls (fetch + XHR)
+    let capturedJwt = null;
+    if (IS_LISTMANAGER) {
+        const origFetch = window.fetch;
+        window.fetch = function(input, init) {
+            try {
+                const url = typeof input === 'string' ? input : (input?.url || '');
+                const authHeader = init?.headers?.Authorization
+                    || init?.headers?.authorization
+                    || (init?.headers instanceof Headers ? init.headers.get('Authorization') : null);
+                if (authHeader && authHeader.startsWith('Bearer ') && url.includes('api.listmanager.greens.org.au')) {
+                    capturedJwt = authHeader.replace('Bearer ', '');
+                    debugLog('JWT captured from fetch');
+                }
+            } catch (e) {}
+            return origFetch.apply(this, arguments);
+        };
+
+        const origXhrOpen = XMLHttpRequest.prototype.open;
+        const origXhrSetHeader = XMLHttpRequest.prototype.setRequestHeader;
+        XMLHttpRequest.prototype.open = function(method, url) {
+            this._gusUrl = url;
+            return origXhrOpen.apply(this, arguments);
+        };
+        XMLHttpRequest.prototype.setRequestHeader = function(name, value) {
+            try {
+                if ((name === 'Authorization' || name === 'authorization') &&
+                    value.startsWith('Bearer ') &&
+                    this._gusUrl && this._gusUrl.includes('api.listmanager.greens.org.au')) {
+                    capturedJwt = value.replace('Bearer ', '');
+                    debugLog('JWT captured from XHR');
+                }
+            } catch (e) {}
+            return origXhrSetHeader.apply(this, arguments);
+        };
+    }
 
     // --- styles ---
     GM_addStyle(`
@@ -119,8 +161,6 @@
         return ('' + s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
     }
 
-    const GUS_DEBUG = false;
-    function debugLog(...args) { if (GUS_DEBUG) console.log('[GUS]', ...args); }
     function dismissOnEscapeOrClickOutside(overlay) {
         overlay.addEventListener('click', (e) => {
             if (e.target === overlay) overlay.remove();
@@ -147,6 +187,85 @@
             .MuiDataGrid-cell[data-field="lastName"] span[role="presentation"],
             .MuiDataGrid-cell[data-field="firstName"] span[role="presentation"] {
                 cursor: pointer !important;
+            }
+        `);
+
+        // --- Roster tracker styles ---
+        GM_addStyle(`
+            .gus-roster-widget {
+                background: #fafafa;
+                border-radius: 8px;
+                padding: 16px 20px;
+                margin: 0 0 0 16px;
+                min-width: 180px;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                gap: 8px;
+            }
+            .gus-roster-title {
+                font-size: 14px;
+                font-weight: 600;
+                color: #333;
+                margin: 0;
+            }
+            .gus-roster-ring {
+                position: relative;
+                width: 100px;
+                height: 100px;
+            }
+            .gus-roster-ring svg {
+                width: 100%;
+                height: 100%;
+                transform: rotate(-90deg);
+            }
+            .gus-roster-ring .gus-ring-bg {
+                fill: none;
+                stroke: #e0e0e0;
+                stroke-width: 8;
+            }
+            .gus-roster-ring .gus-ring-fg {
+                fill: none;
+                stroke: #2e7d32;
+                stroke-width: 8;
+                stroke-linecap: round;
+                transition: stroke-dashoffset 0.6s ease;
+            }
+            .gus-roster-pct {
+                position: absolute;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                font-size: 18px;
+                font-weight: 600;
+                color: #333;
+            }
+            .gus-roster-count {
+                font-size: 13px;
+                color: #666;
+            }
+            .gus-roster-count strong {
+                color: #333;
+            }
+            .gus-roster-refresh {
+                background: none;
+                border: none;
+                cursor: pointer;
+                font-size: 14px;
+                color: #999;
+                padding: 2px;
+                transition: color 0.15s;
+            }
+            .gus-roster-refresh:hover {
+                color: #333;
+            }
+            .gus-roster-loading {
+                color: #999;
+                font-size: 13px;
+            }
+            .gus-roster-error {
+                color: #d32f2f;
+                font-size: 12px;
             }
         `);
 
@@ -319,6 +438,154 @@ The election has now been called! We need people to hand out 'How to Vote' cards
             container.appendChild(badge);
         }
 
+        // --- Roster count tracker ---
+        const ROSTER_TARGET = 1601;
+        let rosterCount = null;
+        let rosterLoading = false;
+        let rosterError = null;
+
+        function fetchRosterCount(callback) {
+            if (!capturedJwt) {
+                if (callback) callback(null, 'Waiting for auth...');
+                return;
+            }
+            rosterLoading = true;
+            rosterError = null;
+            updateRosterWidget();
+
+            const body = JSON.stringify({
+                geometryIds: [6],
+                roster: {
+                    electionId: 182,
+                    rosterTypes: ['Rostered'],
+                    shiftStatus: 'Confirmed',
+                    votingPeriod: 'Any'
+                }
+            });
+
+            GM_xmlhttpRequest({
+                method: 'POST',
+                url: 'https://api.listmanager.greens.org.au/advsearch/preview',
+                headers: {
+                    'Authorization': 'Bearer ' + capturedJwt,
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json'
+                },
+                data: body,
+                onload: function(response) {
+                    rosterLoading = false;
+                    try {
+                        const data = JSON.parse(response.responseText);
+                        rosterCount = data.count ?? null;
+                        rosterError = rosterCount === null ? 'No count in response' : null;
+                    } catch (e) {
+                        rosterError = 'Parse error';
+                        debugLog('Roster API parse error:', e);
+                    }
+                    updateRosterWidget();
+                    if (callback) callback(rosterCount, rosterError);
+                },
+                onerror: function(err) {
+                    rosterLoading = false;
+                    rosterError = 'Request failed';
+                    debugLog('Roster API error:', err);
+                    updateRosterWidget();
+                    if (callback) callback(null, 'Request failed');
+                }
+            });
+        }
+
+        function buildRingHtml(pct) {
+            const r = 40;
+            const circumference = 2 * Math.PI * r;
+            const offset = circumference - (pct / 100) * circumference;
+            return `
+                <div class="gus-roster-ring">
+                    <svg viewBox="0 0 100 100">
+                        <circle class="gus-ring-bg" cx="50" cy="50" r="${r}"/>
+                        <circle class="gus-ring-fg" cx="50" cy="50" r="${r}"
+                            stroke-dasharray="${circumference}"
+                            stroke-dashoffset="${offset}"/>
+                    </svg>
+                    <span class="gus-roster-pct">${Math.round(pct)}%</span>
+                </div>
+            `;
+        }
+
+        function updateRosterWidget() {
+            const widget = document.querySelector('.gus-roster-widget');
+            if (!widget) return;
+
+            const body = widget.querySelector('.gus-roster-body');
+            if (!body) return;
+
+            if (rosterLoading) {
+                body.innerHTML = '<span class="gus-roster-loading"><span class="gus-spinner"></span> Loading...</span>';
+                return;
+            }
+            if (rosterError) {
+                body.innerHTML = `<span class="gus-roster-error">${escapeHtml(rosterError)}</span>`;
+                return;
+            }
+            if (rosterCount !== null) {
+                const pct = Math.min((rosterCount / ROSTER_TARGET) * 100, 100);
+                body.innerHTML = `
+                    ${buildRingHtml(pct)}
+                    <span class="gus-roster-count"><strong>${rosterCount.toLocaleString()}</strong> / ${ROSTER_TARGET.toLocaleString()}</span>
+                `;
+            }
+        }
+
+        function injectRosterWidget() {
+            if (document.querySelector('.gus-roster-widget')) return;
+
+            // Find the stats area — the container with "Call statistics"
+            const statsContainer = document.querySelector('div.css-1s6dbl6');
+            if (!statsContainer) return;
+
+            // Make the parent flex so widget sits alongside
+            const parent = statsContainer.parentElement;
+            if (parent && !parent.dataset.gusFlexed) {
+                parent.style.display = 'flex';
+                parent.style.alignItems = 'flex-start';
+                parent.dataset.gusFlexed = '1';
+            }
+
+            const widget = document.createElement('div');
+            widget.className = 'gus-roster-widget';
+            widget.innerHTML = `
+                <div style="display:flex;align-items:center;gap:6px;">
+                    <span class="gus-roster-title">Roster progress</span>
+                    <button class="gus-roster-refresh" title="Refresh">&#x21bb;</button>
+                </div>
+                <div class="gus-roster-body">
+                    <span class="gus-roster-loading">Waiting for auth...</span>
+                </div>
+            `;
+
+            widget.querySelector('.gus-roster-refresh').addEventListener('click', () => {
+                fetchRosterCount();
+            });
+
+            // Insert next to the stats container
+            parent.insertBefore(widget, statsContainer.nextSibling);
+
+            // Try initial fetch if JWT already captured
+            if (capturedJwt) {
+                fetchRosterCount();
+            }
+        }
+
+        // Watch for JWT becoming available and auto-fetch
+        let rosterJwtCheckInterval = setInterval(() => {
+            if (capturedJwt && rosterCount === null && !rosterLoading) {
+                fetchRosterCount();
+            }
+            if (rosterCount !== null) {
+                clearInterval(rosterJwtCheckInterval);
+            }
+        }, 2000);
+
         let lastListId = getListId();
 
         function checkListChange() {
@@ -334,12 +601,14 @@ The election has now been called! We need people to hand out 'How to Vote' cards
         const lmObserver = new MutationObserver(() => {
             injectButton();
             injectVersionBadge();
+            injectRosterWidget();
             checkListChange();
         });
         lmObserver.observe(document.body, { childList: true, subtree: true });
 
         injectButton();
         injectVersionBadge();
+        injectRosterWidget();
     }
 
     // --- Rocket ---
