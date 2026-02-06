@@ -26,9 +26,34 @@
     function debugLog(...args) { if (GUS_DEBUG) console.log('[GUS]', ...args); }
 
     // --- JWT token interception ---
-    // Capture Bearer token from the app's own API calls (fetch + XHR)
+    // Capture Bearer token via: 1) localStorage (Auth0 cache), 2) fetch/XHR interception
     let capturedJwt = null;
+
+    function scanLocalStorageForJwt() {
+        try {
+            for (let i = 0; i < localStorage.length; i++) {
+                const key = localStorage.key(i);
+                if (key && key.startsWith('@@auth0spajs@@')) {
+                    const raw = localStorage.getItem(key);
+                    const data = JSON.parse(raw);
+                    const token = data?.body?.access_token;
+                    if (token) {
+                        debugLog('JWT found in localStorage:', key);
+                        return token;
+                    }
+                }
+            }
+        } catch (e) {
+            debugLog('localStorage JWT scan error:', e);
+        }
+        return null;
+    }
+
     if (IS_LISTMANAGER) {
+        // Try localStorage first (catches tokens from before script loaded)
+        capturedJwt = scanLocalStorageForJwt();
+
+        // Also intercept future fetch/XHR calls for token refresh
         const origFetch = window.fetch;
         window.fetch = function(input, init) {
             try {
@@ -567,8 +592,8 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                 fetchRosterCount();
             });
 
-            // Insert next to the stats container
-            parent.insertBefore(widget, statsContainer.nextSibling);
+            // Insert before the stats container (to the left)
+            parent.insertBefore(widget, statsContainer);
 
             // Try initial fetch if JWT already captured
             if (capturedJwt) {
@@ -577,11 +602,17 @@ The election has now been called! We need people to hand out 'How to Vote' cards
         }
 
         // Watch for JWT becoming available and auto-fetch
+        let rosterJwtCheckCount = 0;
         let rosterJwtCheckInterval = setInterval(() => {
+            // Re-scan localStorage if we still don't have a JWT
+            if (!capturedJwt) {
+                capturedJwt = scanLocalStorageForJwt();
+            }
             if (capturedJwt && rosterCount === null && !rosterLoading) {
                 fetchRosterCount();
             }
-            if (rosterCount !== null) {
+            rosterJwtCheckCount++;
+            if (rosterCount !== null || rosterJwtCheckCount > 30) {
                 clearInterval(rosterJwtCheckInterval);
             }
         }, 2000);
