@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         List Manager Tweaks
 // @namespace    https://github.com/choujar/campaign-userscripts
-// @version      1.12.0
+// @version      1.12.1
 // @description  UX improvements for List Manager and Rocket
 // @author       Sahil Choujar
 // @match        https://listmanager.greens.org.au/*
@@ -605,7 +605,8 @@ The election has now been called! We need people to hand out 'How to Vote' cards
         }
 
         function injectRosterWidget() {
-            if (document.querySelector('.gus-roster-widget')) return;
+            const existing = document.querySelector('.gus-roster-widget');
+            if (existing && existing.isConnected) return;
 
             // Find the stats area — the container with "Call statistics"
             const statsContainer = document.querySelector('div.css-1s6dbl6');
@@ -662,21 +663,34 @@ The election has now been called! We need people to hand out 'How to Vote' cards
 
         let lastListId = getListId();
 
-        function checkListChange() {
+        let lastUrl = location.href;
+
+        function checkNavigation() {
             const currentId = getListId();
-            if (currentId && currentId !== lastListId) {
+            const currentUrl = location.href;
+            const urlChanged = currentUrl !== lastUrl;
+            const listChanged = currentId && currentId !== lastListId;
+
+            if (listChanged) {
                 lastListId = currentId;
                 const oldBtn = document.querySelector('.gus-template-btn');
                 if (oldBtn) oldBtn.remove();
                 injectButton();
             }
+
+            if (urlChanged) {
+                lastUrl = currentUrl;
+                // Remove old widget so it gets re-injected with fresh data
+                const oldWidget = document.querySelector('.gus-roster-widget');
+                if (oldWidget) oldWidget.remove();
+            }
         }
 
         const lmObserver = new MutationObserver(() => {
+            checkNavigation();
             injectButton();
             injectVersionBadge();
             injectRosterWidget();
-            checkListChange();
         });
         lmObserver.observe(document.body, { childList: true, subtree: true });
 
