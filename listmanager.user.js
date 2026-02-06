@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         List Manager Tweaks
 // @namespace    https://github.com/choujar/campaign-userscripts
-// @version      1.11.2
+// @version      1.12.0
 // @description  UX improvements for List Manager and Rocket
 // @author       Sahil Choujar
 // @match        https://listmanager.greens.org.au/*
@@ -39,32 +39,18 @@
             for (let i = 0; i < ls.length; i++) {
                 allKeys.push(ls.key(i));
             }
-            console.log('[GUS] page localStorage keys:', allKeys);
-
             const authKeys = allKeys.filter(k => k && (
                 k.includes('auth0') || k.includes('token') || k.includes('jwt') || k.includes('access')
             ));
-            console.log('[GUS] Auth-related keys:', authKeys);
-
             for (const key of authKeys) {
                 const raw = ls.getItem(key);
                 try {
                     const data = JSON.parse(raw);
-                    console.log('[GUS] Key:', key, '→ structure:', Object.keys(data), data.body ? 'has body → ' + Object.keys(data.body) : 'no body');
                     const token = data?.body?.access_token;
-                    if (token) {
-                        console.log('[GUS] JWT found in key:', key);
-                        return token;
-                    }
-                } catch (e) {
-                    console.log('[GUS] Key:', key, '→ not JSON, value preview:', raw?.substring(0, 100));
-                }
+                    if (token) return token;
+                } catch (e) {}
             }
-
-            console.log('[GUS] No JWT found in localStorage');
-        } catch (e) {
-            console.log('[GUS] localStorage scan error:', e);
-        }
+        } catch (e) {}
         return null;
     }
 
@@ -77,15 +63,11 @@
         pageWindow.fetch = function(input, init) {
             try {
                 const url = typeof input === 'string' ? input : (input?.url || '');
-                if (url.includes('listmanager') || url.includes('auth0')) {
-                    console.log('[GUS] fetch intercepted:', url.substring(0, 120));
-                }
                 const authHeader = init?.headers?.Authorization
                     || init?.headers?.authorization
                     || (init?.headers instanceof Headers ? init.headers.get('Authorization') : null);
                 if (authHeader && authHeader.startsWith('Bearer ') && url.includes('api.listmanager.greens.org.au')) {
                     capturedJwt = authHeader.replace('Bearer ', '');
-                    console.log('[GUS] JWT captured from fetch!');
                 }
             } catch (e) {}
             return origFetch.apply(this, arguments);
@@ -103,7 +85,6 @@
                     value.startsWith('Bearer ') &&
                     this._gusUrl && this._gusUrl.includes('api.listmanager.greens.org.au')) {
                     capturedJwt = value.replace('Bearer ', '');
-                    console.log('[GUS] JWT captured from XHR!');
                 }
             } catch (e) {}
             return origXhrSetHeader.apply(this, arguments);
@@ -499,6 +480,13 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                 if (callback) callback(null, 'Waiting for auth...');
                 return;
             }
+            if (isJwtExpired(capturedJwt)) {
+                capturedJwt = null;
+                rosterError = 'Auth expired, refreshing...';
+                updateRosterWidget();
+                waitForJwtAndRetry(callback);
+                return;
+            }
             rosterLoading = true;
             rosterError = null;
             updateRosterWidget();
@@ -524,16 +512,19 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                 },
                 onload: function(response) {
                     rosterLoading = false;
-                    console.log('[GUS] Roster API status:', response.status);
-                    console.log('[GUS] Roster API response:', response.responseText?.substring(0, 500));
+                    if (response.status === 401) {
+                        capturedJwt = null;
+                        rosterError = 'Auth expired, refreshing...';
+                        updateRosterWidget();
+                        waitForJwtAndRetry(callback);
+                        return;
+                    }
                     try {
                         const data = JSON.parse(response.responseText);
-                        console.log('[GUS] Roster API parsed:', Object.keys(data), 'count:', data.count);
                         rosterCount = data.count ?? null;
                         rosterError = rosterCount === null ? 'No count in response' : null;
                     } catch (e) {
                         rosterError = 'Parse error';
-                        console.log('[GUS] Roster API parse error:', e);
                     }
                     updateRosterWidget();
                     if (callback) callback(rosterCount, rosterError);
@@ -546,6 +537,30 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                     if (callback) callback(null, 'Request failed');
                 }
             });
+        }
+
+        function isJwtExpired(token) {
+            try {
+                const payload = JSON.parse(atob(token.split('.')[1]));
+                return payload.exp && (payload.exp * 1000) < Date.now();
+            } catch (e) {
+                return false;
+            }
+        }
+
+        function waitForJwtAndRetry(callback) {
+            let retryCount = 0;
+            const interval = setInterval(() => {
+                retryCount++;
+                if (capturedJwt && !isJwtExpired(capturedJwt)) {
+                    clearInterval(interval);
+                    fetchRosterCount(callback);
+                } else if (retryCount > 15) {
+                    clearInterval(interval);
+                    rosterError = 'Auth timeout — click refresh';
+                    updateRosterWidget();
+                }
+            }, 2000);
         }
 
         function buildRingHtml(pct) {
