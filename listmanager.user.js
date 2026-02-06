@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         List Manager Tweaks
 // @namespace    https://github.com/choujar/campaign-userscripts
-// @version      1.10.4
+// @version      1.10.5
 // @description  UX improvements for List Manager and Rocket
 // @author       Sahil Choujar
 // @match        https://listmanager.greens.org.au/*
@@ -500,25 +500,25 @@ The election has now been called! We need people to hand out 'How to Vote' cards
             rosterError = null;
             updateRosterWidget();
 
-            const body = JSON.stringify({
-                geometryIds: [6],
-                roster: {
-                    electionId: 182,
-                    rosterTypes: ['Rostered'],
-                    shiftStatus: 'Confirmed',
-                    votingPeriod: 'Any'
-                }
+            const tree = JSON.stringify({
+                op: 'intersection',
+                nodes: [
+                    { op: 'filter', filter: { name: 'geometryIds', value: [6], operator: 'lives in' } },
+                    { op: 'filter', filter: { name: 'roster', value: { electionId: 182, electorateIds: [], rosterTypes: ['Rostered'], shiftStatus: 'Confirmed', votingPeriod: 'Any' } } }
+                ],
+                printTime: false,
+                useAdvancedSearchII: false
             });
+            const url = 'https://api.listmanager.greens.org.au/advsearch/preview?domainCode=sa&tree=' + encodeURIComponent(tree);
 
             GM_xmlhttpRequest({
-                method: 'POST',
-                url: 'https://api.listmanager.greens.org.au/advsearch/preview',
+                method: 'GET',
+                url: url,
                 headers: {
                     'Authorization': 'Bearer ' + capturedJwt,
-                    'Accept': 'application/json',
-                    'Content-Type': 'application/json'
+                    'Accept': '*/*',
+                    'Origin': 'https://listmanager.greens.org.au'
                 },
-                data: body,
                 onload: function(response) {
                     rosterLoading = false;
                     console.log('[GUS] Roster API status:', response.status);
