@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         List Manager Tweaks
 // @namespace    https://github.com/choujar/campaign-userscripts
-// @version      1.10.3
+// @version      1.10.4
 // @description  UX improvements for List Manager and Rocket
 // @author       Sahil Choujar
 // @match        https://listmanager.greens.org.au/*
@@ -521,13 +521,16 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                 data: body,
                 onload: function(response) {
                     rosterLoading = false;
+                    console.log('[GUS] Roster API status:', response.status);
+                    console.log('[GUS] Roster API response:', response.responseText?.substring(0, 500));
                     try {
                         const data = JSON.parse(response.responseText);
+                        console.log('[GUS] Roster API parsed:', Object.keys(data), 'count:', data.count);
                         rosterCount = data.count ?? null;
                         rosterError = rosterCount === null ? 'No count in response' : null;
                     } catch (e) {
                         rosterError = 'Parse error';
-                        debugLog('Roster API parse error:', e);
+                        console.log('[GUS] Roster API parse error:', e);
                     }
                     updateRosterWidget();
                     if (callback) callback(rosterCount, rosterError);
