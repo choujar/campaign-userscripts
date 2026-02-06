@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         List Manager Tweaks
 // @namespace    https://github.com/choujar/campaign-userscripts
-// @version      1.10.7
+// @version      1.10.8
 // @description  UX improvements for List Manager and Rocket
 // @author       Sahil Choujar
 // @match        https://listmanager.greens.org.au/*
@@ -240,12 +240,11 @@
         // --- Roster tracker styles ---
         GM_addStyle(`
             .gus-roster-widget {
-                background: #fafafa;
-                border-radius: 8px;
-                padding: 16px 20px;
+                background: transparent;
+                padding: 0 20px;
                 margin-left: auto;
-                margin-right: 16px;
-                min-width: 180px;
+                margin-right: 0;
+                min-width: 140px;
                 display: flex;
                 flex-direction: column;
                 align-items: center;
@@ -259,8 +258,8 @@
             }
             .gus-roster-ring {
                 position: relative;
-                width: 100px;
-                height: 100px;
+                width: 76px;
+                height: 76px;
             }
             .gus-roster-ring svg {
                 width: 100%;
@@ -284,7 +283,7 @@
                 top: 50%;
                 left: 50%;
                 transform: translate(-50%, -50%);
-                font-size: 18px;
+                font-size: 15px;
                 font-weight: 600;
                 color: #333;
             }
@@ -598,7 +597,7 @@ The election has now been called! We need people to hand out 'How to Vote' cards
             const parent = statsContainer.parentElement;
             if (parent && !parent.dataset.gusFlexed) {
                 parent.style.display = 'flex';
-                parent.style.alignItems = 'center';
+                parent.style.alignItems = 'flex-start';
                 parent.dataset.gusFlexed = '1';
             }
 
