@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         List Manager Tweaks
 // @namespace    https://github.com/choujar/campaign-userscripts
-// @version      1.9.9
+// @version      1.9.10
 // @description  UX improvements for List Manager and Rocket
 // @author       Sahil Choujar
 // @match        https://listmanager.greens.org.au/*
@@ -578,18 +578,8 @@ The election has now been called! We need people to hand out 'How to Vote' cards
         }
 
         function checkDoNotSms() {
-            // Angular ng-show/ng-if only renders when the flag is truthy
-            const ngEls = document.querySelectorAll('[ng-show*="do_not"], [ng-if*="do_not"]');
-            for (const el of ngEls) {
-                if (el.offsetParent !== null) return true;
-            }
-            // Checked checkboxes with "do not" labels
-            const checkboxes = document.querySelectorAll('input[type="checkbox"]:checked');
-            for (const cb of checkboxes) {
-                const label = cb.closest('label') || (cb.id && document.querySelector('label[for="' + cb.id + '"]'));
-                if (label && /do.not.(sms|call|text|contact)/i.test(label.textContent)) return true;
-            }
-            return false;
+            // ng-if removes the element entirely when false — presence means flag is set
+            return document.querySelector('span[ng-if*="do_not_sms"]') !== null;
         }
 
         function getYourName() { return GM_getValue('gus_your_name', null); }
