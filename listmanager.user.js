@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         List Manager Tweaks
 // @namespace    https://github.com/choujar/campaign-userscripts
-// @version      1.12.1
+// @version      1.12.2
 // @description  UX improvements for List Manager and Rocket
 // @author       Sahil Choujar
 // @match        https://listmanager.greens.org.au/*
@@ -12,6 +12,7 @@
 // @grant        GM_info
 // @grant        GM_xmlhttpRequest
 // @connect      api.listmanager.greens.org.au
+// @connect      nominatim.openstreetmap.org
 // @updateURL    https://raw.githubusercontent.com/choujar/campaign-userscripts/main/listmanager.user.js
 // @downloadURL  https://raw.githubusercontent.com/choujar/campaign-userscripts/main/listmanager.user.js
 // ==/UserScript==
