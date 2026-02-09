@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         List Manager Tweaks
 // @namespace    https://github.com/choujar/campaign-userscripts
-// @version      1.12.3
+// @version      1.12.4
 // @description  UX improvements for List Manager and Rocket
 // @author       Sahil Choujar
 // @match        https://listmanager.greens.org.au/*
@@ -1251,11 +1251,14 @@ The election has now been called! We need people to hand out 'How to Vote' cards
             if (sameIgnoreCase(electorate, suburb)) {
                 filled = filled.replace(/\[electorate\]\s*\(\s*\[suburb\]\s*\)/gi, '[electorate]');
             }
-            filled = filled.replace(/\[their name\]/gi, name || '[their name]');
-            filled = filled.replace(/\[your name\]/gi, yourName || '[your name]');
-            filled = filled.replace(/\[suburb\]/gi, suburb || '[suburb]');
-            filled = filled.replace(/\[electorate\]/gi, electorate || '[electorate]');
-            return filled;
+            filled = filled.replace(/\[their name\]/gi, name || '');
+            filled = filled.replace(/\[your name\]/gi, yourName || '');
+            filled = filled.replace(/\[suburb\]/gi, suburb || '');
+            filled = filled.replace(/\[electorate\]/gi, electorate || '');
+            // Clean up empty parentheses and extra whitespace left by stripped placeholders
+            filled = filled.replace(/\s*\(\s*\)\s*/g, ' ');
+            filled = filled.replace(/  +/g, ' ');
+            return filled.trim();
         }
 
         function fillTemplateForPreview(template, name, suburb, electorate, yourName) {
