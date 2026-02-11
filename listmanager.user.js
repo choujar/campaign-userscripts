@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         List Manager Tweaks
 // @namespace    https://github.com/choujar/campaign-userscripts
-// @version      1.14.0
+// @version      1.14.1
 // @description  UX improvements for List Manager and Rocket
 // @author       Sahil Choujar
 // @match        https://listmanager.greens.org.au/*
@@ -958,8 +958,8 @@ The election has now been called! We need people to hand out 'How to Vote' cards
             }
             .gus-note-chip {
                 display: inline-block;
-                padding: 2px 8px;
-                border-radius: 3px;
+                padding: 3px 12px;
+                border-radius: 12px;
                 font-size: 12px;
                 cursor: pointer;
                 border: 1px solid #555;
@@ -981,13 +981,13 @@ The election has now been called! We need people to hand out 'How to Vote' cards
             }
             .gus-note-chips-gear {
                 cursor: pointer;
-                color: #666;
-                font-size: 13px;
-                padding: 2px;
+                color: #999;
+                font-size: 15px;
+                padding: 2px 4px;
                 transition: color 0.15s;
             }
             .gus-note-chips-gear:hover {
-                color: #ccc;
+                color: #fff;
             }
             .gus-chips-editor {
                 background: #2b2b2b;
@@ -1023,18 +1023,31 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                 width: 14px;
                 text-align: center;
             }
-            .gus-chips-save {
-                align-self: flex-end;
+            .gus-chips-btns {
+                display: flex;
+                gap: 6px;
+                justify-content: flex-end;
+            }
+            .gus-chips-save, .gus-chips-cancel {
                 padding: 2px 10px;
                 border: none;
                 border-radius: 3px;
-                background: #2e7d32;
-                color: #fff;
                 font-size: 11px;
                 cursor: pointer;
             }
+            .gus-chips-save {
+                background: #2e7d32;
+                color: #fff;
+            }
             .gus-chips-save:hover {
                 background: #256b29;
+            }
+            .gus-chips-cancel {
+                background: #555;
+                color: #ccc;
+            }
+            .gus-chips-cancel:hover {
+                background: #666;
             }
         `);
 
@@ -1883,6 +1896,15 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                     row.appendChild(inp);
                     editorEl.appendChild(row);
                 }
+                const btns = document.createElement('div');
+                btns.className = 'gus-chips-btns';
+                const cancelBtn = document.createElement('button');
+                cancelBtn.className = 'gus-chips-cancel';
+                cancelBtn.textContent = 'Cancel';
+                cancelBtn.addEventListener('click', () => {
+                    editorEl.remove();
+                    editorEl = null;
+                });
                 const saveBtn = document.createElement('button');
                 saveBtn.className = 'gus-chips-save';
                 saveBtn.textContent = 'Save';
@@ -1893,7 +1915,9 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                     editorEl = null;
                     buildChips();
                 });
-                editorEl.appendChild(saveBtn);
+                btns.appendChild(cancelBtn);
+                btns.appendChild(saveBtn);
+                editorEl.appendChild(btns);
                 container.parentElement.insertBefore(editorEl, container);
             }
 
