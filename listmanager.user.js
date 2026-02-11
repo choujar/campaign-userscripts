@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         List Manager Tweaks
 // @namespace    https://github.com/choujar/campaign-userscripts
-// @version      1.19.0
+// @version      1.19.1
 // @description  UX improvements for List Manager and Rocket
 // @author       Sahil Choujar
 // @match        https://listmanager.greens.org.au/*
@@ -905,7 +905,7 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                         statusEl.textContent = `Loading ${loaded} / ${ALL_ELECTORATES.length}...`;
                         renderBreakdownRing();
                         if (loaded >= ALL_ELECTORATES.length) {
-                            statusEl.textContent = `Done — ${ALL_ELECTORATES.length} electorates loaded`;
+                            statusEl.textContent = `${ALL_ELECTORATES.length} electorates loaded`;
                         }
                     });
                 }, i * 100);
