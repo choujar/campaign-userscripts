@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         List Manager Tweaks
 // @namespace    https://github.com/choujar/campaign-userscripts
-// @version      1.20.0
+// @version      1.20.1
 // @description  UX improvements for List Manager and Rocket
 // @author       Sahil Choujar
 // @match        https://listmanager.greens.org.au/*
@@ -829,8 +829,7 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                                 <svg viewBox="0 0 100 100">
                                     <circle class="gus-ring-bg" cx="50" cy="50" r="40"/>
                                     <circle class="gus-ring-progress" cx="50" cy="50" r="40"
-                                        stroke-dasharray="0 251.33"
-                                        transform="rotate(-90 50 50)"/>
+                                        stroke-dasharray="0 251.33"/>
                                 </svg>
                                 <span class="gus-roster-pct gus-progress-pct">0%</span>
                             </div>
