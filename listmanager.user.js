@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         List Manager Tweaks
 // @namespace    https://github.com/choujar/campaign-userscripts
-// @version      1.15.2
+// @version      1.16.0
 // @description  UX improvements for List Manager and Rocket
 // @author       Sahil Choujar
 // @match        https://listmanager.greens.org.au/*
@@ -254,17 +254,11 @@
                 stroke: #e0e0e0;
                 stroke-width: 8;
             }
-            .gus-roster-ring .gus-ring-fg {
+            .gus-roster-ring .gus-ring-seg {
                 fill: none;
-                stroke: #2e7d32;
                 stroke-width: 8;
-                transition: stroke-dashoffset 0.6s ease;
-            }
-            .gus-roster-ring .gus-ring-other {
-                fill: none;
-                stroke: #5c9dc4;
-                stroke-width: 8;
-                transition: stroke-dashoffset 0.6s ease;
+                pointer-events: stroke;
+                cursor: pointer;
             }
             .gus-roster-pct {
                 position: absolute;
@@ -495,9 +489,13 @@ The election has now been called! We need people to hand out 'How to Vote' cards
 
         // --- Roster count tracker ---
         const ROSTER_TARGET = 1601;
-        const HEYSEN_ELECTORATE_ID = 140532;
+        const ELECTORATES = [
+            { name: 'Heysen', id: 140532, color: '#2e7d32' },
+            { name: 'Adelaide', id: 140511, color: '#5c9dc4' }
+        ];
+        const OTHER_COLOR = '#888';
         let rosterTotal = null;
-        let rosterHeysen = null;
+        let rosterElectorates = {};
         let rosterLoading = false;
         let rosterError = null;
 
@@ -513,11 +511,11 @@ The election has now been called! We need people to hand out 'How to Vote' cards
             });
         }
 
-        function buildHeysenTree() {
+        function buildElectorateTree(electorateId) {
             return JSON.stringify({
                 op: 'intersection',
                 nodes: [
-                    { op: 'filter', filter: { name: 'roster', value: { electionId: 182, electorateIds: [HEYSEN_ELECTORATE_ID], rosterTypes: ['Rostered'], shiftStatus: 'Confirmed', votingPeriod: 'Polling Day' } } }
+                    { op: 'filter', filter: { name: 'roster', value: { electionId: 182, electorateIds: [electorateId], rosterTypes: ['Rostered'], shiftStatus: 'Confirmed', votingPeriod: 'Polling Day' } } }
                 ],
                 printTime: false,
                 useAdvancedSearchII: false
@@ -561,12 +559,13 @@ The election has now been called! We need people to hand out 'How to Vote' cards
             rosterError = null;
             updateRosterWidget();
 
+            const totalCalls = 1 + ELECTORATES.length;
             let done = 0;
             let authExpired = false;
 
             function checkDone() {
                 done++;
-                if (done < 2) return;
+                if (done < totalCalls) return;
                 rosterLoading = false;
                 if (authExpired) {
                     capturedJwt = null;
@@ -586,12 +585,14 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                 checkDone();
             });
 
-            fetchOneRoster(buildHeysenTree(), function(count, err) {
-                if (err === 'auth_expired') { authExpired = true; }
-                else if (err) { if (!rosterError) rosterError = err; }
-                else { rosterHeysen = count; }
-                checkDone();
-            });
+            for (const elec of ELECTORATES) {
+                fetchOneRoster(buildElectorateTree(elec.id), function(count, err) {
+                    if (err === 'auth_expired') { authExpired = true; }
+                    else if (err) { if (!rosterError) rosterError = err; }
+                    else { rosterElectorates[elec.name] = count; }
+                    checkDone();
+                });
+            }
         }
 
         function isJwtExpired(token) {
@@ -618,24 +619,24 @@ The election has now been called! We need people to hand out 'How to Vote' cards
             }, 2000);
         }
 
-        function buildRingHtml(heysenPct, otherPct, heysenCount, otherCount) {
+        function buildRingHtml(segments, totalPct) {
             const r = 40;
             const circ = 2 * Math.PI * r;
-            const heysenLen = (heysenPct / 100) * circ;
-            const otherLen = (otherPct / 100) * circ;
-            const totalPct = Math.round(heysenPct + otherPct);
-            const otherRotation = (heysenPct / 100) * 360;
+            let circles = '';
+            let rotation = 0;
+            for (const seg of segments) {
+                const len = (seg.pct / 100) * circ;
+                circles += `<circle class="gus-ring-seg" cx="50" cy="50" r="${r}"
+                    stroke="${seg.color}" stroke-dasharray="${len} ${circ - len}"
+                    data-hover-text="${seg.count}"
+                    style="transform: rotate(${rotation}deg); transform-origin: 50% 50%;"/>`;
+                rotation += (seg.pct / 100) * 360;
+            }
             return `
                 <div class="gus-roster-ring">
                     <svg viewBox="0 0 100 100">
                         <circle class="gus-ring-bg" cx="50" cy="50" r="${r}"/>
-                        <circle class="gus-ring-fg" cx="50" cy="50" r="${r}"
-                            stroke-dasharray="${heysenLen} ${circ - heysenLen}"
-                            data-hover-text="${heysenCount}" style="pointer-events: stroke; cursor: pointer;"/>
-                        <circle class="gus-ring-other" cx="50" cy="50" r="${r}"
-                            stroke-dasharray="${otherLen} ${circ - otherLen}"
-                            data-hover-text="${otherCount}"
-                            style="transform: rotate(${otherRotation}deg); transform-origin: 50% 50%; pointer-events: stroke; cursor: pointer;"/>
+                        ${circles}
                     </svg>
                     <span class="gus-roster-pct" data-default="${totalPct}%">${totalPct}%</span>
                 </div>
@@ -675,16 +676,28 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                 return;
             }
             if (rosterTotal !== null) {
-                const heysen = rosterHeysen ?? 0;
-                const other = rosterTotal - heysen;
-                const heysenPct = Math.min((heysen / ROSTER_TARGET) * 100, 100);
-                const otherPct = Math.min((other / ROSTER_TARGET) * 100, 100 - heysenPct);
+                let namedTotal = 0;
+                const segments = [];
+                for (const elec of ELECTORATES) {
+                    const count = rosterElectorates[elec.name] ?? 0;
+                    namedTotal += count;
+                    const pct = Math.min((count / ROSTER_TARGET) * 100, 100);
+                    segments.push({ color: elec.color, pct, count: count.toLocaleString() });
+                }
+                const otherCount = Math.max(rosterTotal - namedTotal, 0);
+                const otherPct = Math.min((otherCount / ROSTER_TARGET) * 100, 100);
+                if (otherCount > 0) {
+                    segments.push({ color: OTHER_COLOR, pct: otherPct, count: otherCount.toLocaleString() });
+                }
+                const totalPct = Math.round(Math.min((rosterTotal / ROSTER_TARGET) * 100, 100));
+
+                let countParts = ELECTORATES.map(e => (rosterElectorates[e.name] ?? 0).toLocaleString()).join(' + ');
                 body.innerHTML = `
-                    ${buildRingHtml(heysenPct, otherPct, heysen.toLocaleString(), other.toLocaleString())}
-                    <span class="gus-roster-count"><strong>${rosterTotal.toLocaleString()}</strong> (${heysen.toLocaleString()}) / ${ROSTER_TARGET.toLocaleString()}</span>
+                    ${buildRingHtml(segments, totalPct)}
+                    <span class="gus-roster-count"><strong>${rosterTotal.toLocaleString()}</strong> / ${ROSTER_TARGET.toLocaleString()}</span>
                     <div class="gus-roster-legend">
-                        <span><span class="gus-dot" style="background:#2e7d32;"></span>Heysen</span>
-                        <span><span class="gus-dot" style="background:#5c9dc4;"></span>Other</span>
+                        ${ELECTORATES.map(e => `<span><span class="gus-dot" style="background:${e.color};"></span>${escapeHtml(e.name)}</span>`).join('')}
+                        <span><span class="gus-dot" style="background:${OTHER_COLOR};"></span>Other</span>
                     </div>
                 `;
                 attachRingHover(widget);
