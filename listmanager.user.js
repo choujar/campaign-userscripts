@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         List Manager Tweaks
 // @namespace    https://github.com/choujar/campaign-userscripts
-// @version      1.14.2
+// @version      1.15.0
 // @description  UX improvements for List Manager and Rocket
 // @author       Sahil Choujar
 // @match        https://listmanager.greens.org.au/*
@@ -1017,11 +1017,9 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                 align-items: center;
                 gap: 4px;
             }
-            .gus-chips-editor-row label {
-                font-size: 11px;
-                color: #888;
-                width: 14px;
-                text-align: center;
+            .gus-chips-editor-row input[type="checkbox"] {
+                cursor: pointer;
+                accent-color: #2e7d32;
             }
             .gus-chips-btns {
                 display: flex;
@@ -1794,14 +1792,25 @@ The election has now been called! We need people to hand out 'How to Vote' cards
             panelBody.appendChild(wrap);
         }
 
-        const DEFAULT_NOTE_CHIPS = ['re HTV', 'left vm', 'sent text', 'rostered'];
+        const DEFAULT_NOTE_CHIPS = [
+            { label: 're HTV', visible: true },
+            { label: 'left vm', visible: true },
+            { label: 'sent text', visible: true },
+            { label: 'rostered', visible: true }
+        ];
 
         function getNoteChips() {
             try {
                 const saved = GM_getValue('gus_note_chips');
                 if (saved) {
                     const parsed = JSON.parse(saved);
-                    if (Array.isArray(parsed) && parsed.length) return parsed.slice(0, 4);
+                    if (Array.isArray(parsed) && parsed.length) {
+                        // Migrate old string format
+                        if (typeof parsed[0] === 'string') {
+                            return parsed.slice(0, 4).map(s => ({ label: s, visible: true }));
+                        }
+                        return parsed.slice(0, 4);
+                    }
                 }
             } catch (e) {}
             return DEFAULT_NOTE_CHIPS;
@@ -1853,12 +1862,12 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                 container.appendChild(dateChip);
 
                 // Action chips
-                for (const label of chips) {
-                    if (!label.trim()) continue;
+                for (const c of chips) {
+                    if (!c.label || !c.label.trim() || !c.visible) continue;
                     const chip = document.createElement('span');
                     chip.className = 'gus-note-chip';
-                    chip.textContent = label;
-                    chip.addEventListener('click', () => appendToNotes(textarea, label));
+                    chip.textContent = c.label;
+                    chip.addEventListener('click', () => appendToNotes(textarea, c.label));
                     container.appendChild(chip);
                 }
 
@@ -1881,18 +1890,21 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                 const chips = getNoteChips();
                 editorEl = document.createElement('div');
                 editorEl.className = 'gus-chips-editor';
-                const inputs = [];
+                const rows = [];
                 for (let i = 0; i < 4; i++) {
+                    const c = chips[i] || { label: '', visible: true };
                     const row = document.createElement('div');
                     row.className = 'gus-chips-editor-row';
-                    const lbl = document.createElement('label');
-                    lbl.textContent = (i + 1);
+                    const toggle = document.createElement('input');
+                    toggle.type = 'checkbox';
+                    toggle.checked = c.visible;
+                    toggle.title = 'Show/hide this chip';
                     const inp = document.createElement('input');
                     inp.type = 'text';
-                    inp.value = chips[i] || '';
-                    inp.placeholder = 'Chip ' + (i + 1) + ' (leave empty to hide)';
-                    inputs.push(inp);
-                    row.appendChild(lbl);
+                    inp.value = c.label;
+                    inp.placeholder = 'Chip ' + (i + 1);
+                    rows.push({ inp, toggle });
+                    row.appendChild(toggle);
                     row.appendChild(inp);
                     editorEl.appendChild(row);
                 }
@@ -1909,7 +1921,7 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                 saveBtn.className = 'gus-chips-save';
                 saveBtn.textContent = 'Save';
                 saveBtn.addEventListener('click', () => {
-                    const newChips = inputs.map(i => i.value.trim()).filter(v => v);
+                    const newChips = rows.map(r => ({ label: r.inp.value.trim(), visible: r.toggle.checked })).filter(c => c.label);
                     saveNoteChips(newChips);
                     editorEl.remove();
                     editorEl = null;
