@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         List Manager Tweaks
 // @namespace    https://github.com/choujar/campaign-userscripts
-// @version      1.12.4
+// @version      1.13.0
 // @description  UX improvements for List Manager and Rocket
 // @author       Sahil Choujar
 // @match        https://listmanager.greens.org.au/*
@@ -258,7 +258,12 @@
                 fill: none;
                 stroke: #2e7d32;
                 stroke-width: 8;
-                stroke-linecap: round;
+                transition: stroke-dashoffset 0.6s ease;
+            }
+            .gus-roster-ring .gus-ring-other {
+                fill: none;
+                stroke: #5c9dc4;
+                stroke-width: 8;
                 transition: stroke-dashoffset 0.6s ease;
             }
             .gus-roster-pct {
@@ -299,6 +304,23 @@
             .gus-roster-error {
                 color: #d32f2f;
                 font-size: 12px;
+            }
+            .gus-roster-legend {
+                display: flex;
+                gap: 10px;
+                font-size: 11px;
+                color: #666;
+            }
+            .gus-roster-legend span {
+                display: flex;
+                align-items: center;
+                gap: 3px;
+            }
+            .gus-roster-legend .gus-dot {
+                width: 8px;
+                height: 8px;
+                border-radius: 50%;
+                display: inline-block;
             }
         `);
 
@@ -473,9 +495,45 @@ The election has now been called! We need people to hand out 'How to Vote' cards
 
         // --- Roster count tracker ---
         const ROSTER_TARGET = 1601;
-        let rosterCount = null;
+        const HEYSEN_GEO_ID = 145441;
+        let rosterTotal = null;
+        let rosterHeysen = null;
         let rosterLoading = false;
         let rosterError = null;
+
+        function buildRosterTree(geoId, operator) {
+            return JSON.stringify({
+                op: 'intersection',
+                nodes: [
+                    { op: 'filter', filter: { name: 'geometryIds', value: [geoId], operator: operator } },
+                    { op: 'filter', filter: { name: 'roster', value: { electionId: 182, electorateIds: [], rosterTypes: ['Rostered'], shiftStatus: 'Confirmed', votingPeriod: 'Polling Day' } } }
+                ],
+                printTime: false,
+                useAdvancedSearchII: false
+            });
+        }
+
+        function fetchOneRoster(geoId, operator, cb) {
+            const tree = buildRosterTree(geoId, operator);
+            const url = 'https://api.listmanager.greens.org.au/advsearch/preview?domainCode=sa&tree=' + encodeURIComponent(tree);
+            GM_xmlhttpRequest({
+                method: 'GET',
+                url: url,
+                headers: {
+                    'Authorization': 'Bearer ' + capturedJwt,
+                    'Accept': '*/*',
+                    'Origin': 'https://listmanager.greens.org.au'
+                },
+                onload: function(response) {
+                    if (response.status === 401) { cb(null, 'auth_expired'); return; }
+                    try {
+                        const data = JSON.parse(response.responseText);
+                        cb(data.count ?? null, null);
+                    } catch (e) { cb(null, 'Parse error'); }
+                },
+                onerror: function() { cb(null, 'Request failed'); }
+            });
+        }
 
         function fetchRosterCount(callback) {
             if (!capturedJwt) {
@@ -493,51 +551,36 @@ The election has now been called! We need people to hand out 'How to Vote' cards
             rosterError = null;
             updateRosterWidget();
 
-            const tree = JSON.stringify({
-                op: 'intersection',
-                nodes: [
-                    { op: 'filter', filter: { name: 'geometryIds', value: [6], operator: 'lives in' } },
-                    { op: 'filter', filter: { name: 'roster', value: { electionId: 182, electorateIds: [], rosterTypes: ['Rostered'], shiftStatus: 'Confirmed', votingPeriod: 'Polling Day' } } }
-                ],
-                printTime: false,
-                useAdvancedSearchII: false
-            });
-            const url = 'https://api.listmanager.greens.org.au/advsearch/preview?domainCode=sa&tree=' + encodeURIComponent(tree);
+            let done = 0;
+            let authExpired = false;
 
-            GM_xmlhttpRequest({
-                method: 'GET',
-                url: url,
-                headers: {
-                    'Authorization': 'Bearer ' + capturedJwt,
-                    'Accept': '*/*',
-                    'Origin': 'https://listmanager.greens.org.au'
-                },
-                onload: function(response) {
-                    rosterLoading = false;
-                    if (response.status === 401) {
-                        capturedJwt = null;
-                        rosterError = 'Auth expired, refreshing...';
-                        updateRosterWidget();
-                        waitForJwtAndRetry(callback);
-                        return;
-                    }
-                    try {
-                        const data = JSON.parse(response.responseText);
-                        rosterCount = data.count ?? null;
-                        rosterError = rosterCount === null ? 'No count in response' : null;
-                    } catch (e) {
-                        rosterError = 'Parse error';
-                    }
+            function checkDone() {
+                done++;
+                if (done < 2) return;
+                rosterLoading = false;
+                if (authExpired) {
+                    capturedJwt = null;
+                    rosterError = 'Auth expired, refreshing...';
                     updateRosterWidget();
-                    if (callback) callback(rosterCount, rosterError);
-                },
-                onerror: function(err) {
-                    rosterLoading = false;
-                    rosterError = 'Request failed';
-                    debugLog('Roster API error:', err);
-                    updateRosterWidget();
-                    if (callback) callback(null, 'Request failed');
+                    waitForJwtAndRetry(callback);
+                    return;
                 }
+                updateRosterWidget();
+                if (callback) callback(rosterTotal, rosterError);
+            }
+
+            fetchOneRoster(6, 'lives in', function(count, err) {
+                if (err === 'auth_expired') { authExpired = true; }
+                else if (err) { rosterError = err; }
+                else { rosterTotal = count; }
+                checkDone();
+            });
+
+            fetchOneRoster(HEYSEN_GEO_ID, 'placement in', function(count, err) {
+                if (err === 'auth_expired') { authExpired = true; }
+                else if (err) { if (!rosterError) rosterError = err; }
+                else { rosterHeysen = count; }
+                checkDone();
             });
         }
 
@@ -565,19 +608,26 @@ The election has now been called! We need people to hand out 'How to Vote' cards
             }, 2000);
         }
 
-        function buildRingHtml(pct) {
+        function buildRingHtml(heysenPct, otherPct) {
             const r = 40;
-            const circumference = 2 * Math.PI * r;
-            const offset = circumference - (pct / 100) * circumference;
+            const circ = 2 * Math.PI * r;
+            const heysenLen = (heysenPct / 100) * circ;
+            const otherLen = (otherPct / 100) * circ;
+            const totalPct = Math.round(heysenPct + otherPct);
+            // Heysen arc starts at top (rotation handled by SVG transform)
+            // Other arc starts where Heysen ends
+            const otherRotation = (heysenPct / 100) * 360;
             return `
                 <div class="gus-roster-ring">
                     <svg viewBox="0 0 100 100">
                         <circle class="gus-ring-bg" cx="50" cy="50" r="${r}"/>
                         <circle class="gus-ring-fg" cx="50" cy="50" r="${r}"
-                            stroke-dasharray="${circumference}"
-                            stroke-dashoffset="${offset}"/>
+                            stroke-dasharray="${heysenLen} ${circ - heysenLen}"/>
+                        <circle class="gus-ring-other" cx="50" cy="50" r="${r}"
+                            stroke-dasharray="${otherLen} ${circ - otherLen}"
+                            style="transform: rotate(${otherRotation}deg); transform-origin: 50% 50%;"/>
                     </svg>
-                    <span class="gus-roster-pct">${Math.round(pct)}%</span>
+                    <span class="gus-roster-pct">${totalPct}%</span>
                 </div>
             `;
         }
@@ -597,11 +647,18 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                 body.innerHTML = `<span class="gus-roster-error">${escapeHtml(rosterError)}</span>`;
                 return;
             }
-            if (rosterCount !== null) {
-                const pct = Math.min((rosterCount / ROSTER_TARGET) * 100, 100);
+            if (rosterTotal !== null) {
+                const heysen = rosterHeysen ?? 0;
+                const other = rosterTotal - heysen;
+                const heysenPct = Math.min((heysen / ROSTER_TARGET) * 100, 100);
+                const otherPct = Math.min((other / ROSTER_TARGET) * 100, 100 - heysenPct);
                 body.innerHTML = `
-                    ${buildRingHtml(pct)}
-                    <span class="gus-roster-count"><strong>${rosterCount.toLocaleString()}</strong> / ${ROSTER_TARGET.toLocaleString()}</span>
+                    ${buildRingHtml(heysenPct, otherPct)}
+                    <span class="gus-roster-count"><strong>${rosterTotal.toLocaleString()}</strong> (${heysen.toLocaleString()}) / ${ROSTER_TARGET.toLocaleString()}</span>
+                    <div class="gus-roster-legend">
+                        <span><span class="gus-dot" style="background:#2e7d32;"></span>Heysen</span>
+                        <span><span class="gus-dot" style="background:#5c9dc4;"></span>Other</span>
+                    </div>
                 `;
             }
         }
