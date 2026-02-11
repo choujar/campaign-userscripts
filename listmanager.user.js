@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         List Manager Tweaks
 // @namespace    https://github.com/choujar/campaign-userscripts
-// @version      1.20.1
+// @version      1.20.2
 // @description  UX improvements for List Manager and Rocket
 // @author       Sahil Choujar
 // @match        https://listmanager.greens.org.au/*
@@ -978,8 +978,8 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                 const totalPct = Math.round(Math.min((rosterTotal / ROSTER_TARGET) * 100, 100));
 
                 const segments = [
-                    { color: HEYSEN_COLOR, pct: heysenPct, label: `Heysen: ${heysen}` },
-                    { color: OTHER_COLOR, pct: otherPct, label: `Other: ${other}` }
+                    { color: HEYSEN_COLOR, pct: heysenPct, label: `${heysen}` },
+                    { color: OTHER_COLOR, pct: otherPct, label: `${other}` }
                 ];
 
                 body.innerHTML = `
