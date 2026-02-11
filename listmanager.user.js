@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         List Manager Tweaks
 // @namespace    https://github.com/choujar/campaign-userscripts
-// @version      1.16.0
+// @version      1.17.0
 // @description  UX improvements for List Manager and Rocket
 // @author       Sahil Choujar
 // @match        https://listmanager.greens.org.au/*
@@ -310,11 +310,83 @@
                 align-items: center;
                 gap: 3px;
             }
-            .gus-roster-legend .gus-dot {
+            .gus-roster-legend .gus-dot, .gus-breakdown-row .gus-dot {
                 width: 8px;
                 height: 8px;
                 border-radius: 50%;
                 display: inline-block;
+                flex-shrink: 0;
+            }
+            .gus-breakdown-overlay {
+                position: fixed;
+                top: 0; left: 0; right: 0; bottom: 0;
+                background: rgba(0,0,0,0.5);
+                z-index: 10000;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+            }
+            .gus-breakdown-popup {
+                background: #fff;
+                border-radius: 12px;
+                padding: 20px;
+                width: 520px;
+                max-height: 80vh;
+                overflow-y: auto;
+                box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+            }
+            .gus-breakdown-close {
+                font-size: 22px;
+                cursor: pointer;
+                color: #999;
+                line-height: 1;
+            }
+            .gus-breakdown-close:hover { color: #333; }
+            .gus-breakdown-content {
+                display: flex;
+                gap: 20px;
+                align-items: flex-start;
+            }
+            .gus-breakdown-ring-wrap {
+                flex-shrink: 0;
+            }
+            .gus-breakdown-ring {
+                width: 180px;
+                height: 180px;
+            }
+            .gus-breakdown-ring .gus-roster-pct {
+                font-size: 14px;
+            }
+            .gus-breakdown-list {
+                flex: 1;
+                display: flex;
+                flex-direction: column;
+                gap: 2px;
+                max-height: 300px;
+                overflow-y: auto;
+            }
+            .gus-breakdown-row {
+                display: flex;
+                align-items: center;
+                gap: 6px;
+                padding: 2px 0;
+                font-size: 13px;
+            }
+            .gus-breakdown-name {
+                flex: 1;
+                color: #333;
+            }
+            .gus-breakdown-count {
+                font-weight: 600;
+                color: #333;
+                min-width: 28px;
+                text-align: right;
+            }
+            .gus-breakdown-status {
+                margin-top: 12px;
+                font-size: 12px;
+                color: #999;
+                text-align: center;
             }
         `);
 
@@ -489,15 +561,32 @@ The election has now been called! We need people to hand out 'How to Vote' cards
 
         // --- Roster count tracker ---
         const ROSTER_TARGET = 1601;
-        const ELECTORATES = [
-            { name: 'Heysen', id: 140532, color: '#2e7d32' },
-            { name: 'Adelaide', id: 140511, color: '#5c9dc4' }
-        ];
+        const HEYSEN_ID = 140532;
+        const HEYSEN_COLOR = '#2e7d32';
         const OTHER_COLOR = '#888';
         let rosterTotal = null;
-        let rosterElectorates = {};
+        let rosterHeysen = null;
         let rosterLoading = false;
         let rosterError = null;
+
+        const ALL_ELECTORATES = [
+            ['Adelaide', 140511], ['Badcoe', 140512], ['Black', 140513],
+            ['Bragg', 140514], ['Chaffey', 140515], ['Cheltenham', 140516],
+            ['Colton', 140517], ['Croydon', 140518], ['Davenport', 140519],
+            ['Dunstan', 140520], ['Elder', 140521], ['Elizabeth', 140522],
+            ['Enfield', 140523], ['Finniss', 140524], ['Flinders', 140525],
+            ['Florey', 140526], ['Gibson', 140528], ['Giles', 140529],
+            ['Hammond', 140530], ['Hartley', 140531], ['Heysen', 140532],
+            ['Hurtle Vale', 140557], ['Kaurna', 140533], ['Kavel', 140534],
+            ['King', 140535], ['Lee', 140536], ['Light', 140537],
+            ['Mackillop', 140538], ['Mawson', 140539], ['Morialta', 140540],
+            ['Morphett', 140541], ['Mount Gambier', 140542], ['Narungga', 140543],
+            ['Newland', 140544], ['Ngadjuri', 140527], ['Playford', 140545],
+            ['Port Adelaide', 140546], ['Ramsay', 140547], ['Reynell', 140548],
+            ['Schubert', 140549], ['Stuart', 140550], ['Taylor', 140551],
+            ['Torrens', 140552], ['Unley', 140553], ['Waite', 140554],
+            ['West Torrens', 140555], ['Wright', 140556]
+        ];
 
         function buildTotalTree() {
             return JSON.stringify({
@@ -559,13 +648,12 @@ The election has now been called! We need people to hand out 'How to Vote' cards
             rosterError = null;
             updateRosterWidget();
 
-            const totalCalls = 1 + ELECTORATES.length;
             let done = 0;
             let authExpired = false;
 
             function checkDone() {
                 done++;
-                if (done < totalCalls) return;
+                if (done < 2) return;
                 rosterLoading = false;
                 if (authExpired) {
                     capturedJwt = null;
@@ -585,14 +673,12 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                 checkDone();
             });
 
-            for (const elec of ELECTORATES) {
-                fetchOneRoster(buildElectorateTree(elec.id), function(count, err) {
-                    if (err === 'auth_expired') { authExpired = true; }
-                    else if (err) { if (!rosterError) rosterError = err; }
-                    else { rosterElectorates[elec.name] = count; }
-                    checkDone();
-                });
-            }
+            fetchOneRoster(buildElectorateTree(HEYSEN_ID), function(count, err) {
+                if (err === 'auth_expired') { authExpired = true; }
+                else if (err) { if (!rosterError) rosterError = err; }
+                else { rosterHeysen = count; }
+                checkDone();
+            });
         }
 
         function isJwtExpired(token) {
@@ -619,32 +705,37 @@ The election has now been called! We need people to hand out 'How to Vote' cards
             }, 2000);
         }
 
-        function buildRingHtml(segments, totalPct) {
-            const r = 40;
+        function buildRingSegments(segments, r) {
             const circ = 2 * Math.PI * r;
             let circles = '';
             let rotation = 0;
             for (const seg of segments) {
                 const len = (seg.pct / 100) * circ;
+                if (len < 0.1) continue;
                 circles += `<circle class="gus-ring-seg" cx="50" cy="50" r="${r}"
                     stroke="${seg.color}" stroke-dasharray="${len} ${circ - len}"
-                    data-hover-text="${seg.count}"
+                    data-hover-text="${seg.label}"
                     style="transform: rotate(${rotation}deg); transform-origin: 50% 50%;"/>`;
                 rotation += (seg.pct / 100) * 360;
             }
+            return circles;
+        }
+
+        function buildRingHtml(segments, centerText) {
+            const r = 40;
             return `
-                <div class="gus-roster-ring">
+                <div class="gus-roster-ring" style="cursor:pointer;" title="Click for full breakdown">
                     <svg viewBox="0 0 100 100">
                         <circle class="gus-ring-bg" cx="50" cy="50" r="${r}"/>
-                        ${circles}
+                        ${buildRingSegments(segments, r)}
                     </svg>
-                    <span class="gus-roster-pct" data-default="${totalPct}%">${totalPct}%</span>
+                    <span class="gus-roster-pct" data-default="${centerText}">${centerText}</span>
                 </div>
             `;
         }
 
-        function attachRingHover(widget) {
-            const ring = widget.querySelector('.gus-roster-ring');
+        function attachRingHover(container) {
+            const ring = container.querySelector('.gus-roster-ring');
             if (!ring || ring.dataset.gusHover) return;
             ring.dataset.gusHover = '1';
             const pctEl = ring.querySelector('.gus-roster-pct');
@@ -658,6 +749,118 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                     pctEl.textContent = defaultText;
                 });
             });
+        }
+
+        function electorateColor(index, total) {
+            const hue = (index * 360 / total) % 360;
+            return `hsl(${hue}, 55%, 50%)`;
+        }
+
+        function openBreakdownPopup() {
+            if (!capturedJwt || isJwtExpired(capturedJwt)) return;
+            if (document.querySelector('.gus-breakdown-overlay')) return;
+
+            const overlay = document.createElement('div');
+            overlay.className = 'gus-breakdown-overlay';
+            overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
+
+            const popup = document.createElement('div');
+            popup.className = 'gus-breakdown-popup';
+            popup.innerHTML = `
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+                    <strong style="font-size:16px;">Roster Breakdown by Electorate</strong>
+                    <span class="gus-breakdown-close" title="Close">&times;</span>
+                </div>
+                <div class="gus-breakdown-content">
+                    <div class="gus-breakdown-ring-wrap">
+                        <div class="gus-roster-ring gus-breakdown-ring">
+                            <svg viewBox="0 0 100 100">
+                                <circle class="gus-ring-bg" cx="50" cy="50" r="40"/>
+                            </svg>
+                            <span class="gus-roster-pct" data-default="${rosterTotal?.toLocaleString() ?? '...'}">${rosterTotal?.toLocaleString() ?? '...'}</span>
+                        </div>
+                    </div>
+                    <div class="gus-breakdown-list"></div>
+                </div>
+                <div class="gus-breakdown-status">Loading 0 / ${ALL_ELECTORATES.length}...</div>
+            `;
+
+            popup.querySelector('.gus-breakdown-close').addEventListener('click', () => overlay.remove());
+            overlay.appendChild(popup);
+            document.body.appendChild(overlay);
+
+            const listEl = popup.querySelector('.gus-breakdown-list');
+            const statusEl = popup.querySelector('.gus-breakdown-status');
+            const svgEl = popup.querySelector('.gus-breakdown-ring svg');
+            const pctEl = popup.querySelector('.gus-breakdown-ring .gus-roster-pct');
+
+            const results = [];
+            let loaded = 0;
+
+            function renderBreakdownRing() {
+                const sorted = [...results].sort((a, b) => b.count - a.count);
+                svgEl.querySelectorAll('.gus-ring-seg').forEach(el => el.remove());
+
+                const total = rosterTotal || 1;
+                const segments = sorted.map((r, i) => ({
+                    color: r.color,
+                    pct: (r.count / total) * 100,
+                    label: `${r.name}: ${r.count}`
+                }));
+
+                const r = 40;
+                const circ = 2 * Math.PI * r;
+                let rotation = 0;
+                for (const seg of segments) {
+                    const len = (seg.pct / 100) * circ;
+                    if (len < 0.1) continue;
+                    const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+                    circle.setAttribute('class', 'gus-ring-seg');
+                    circle.setAttribute('cx', '50');
+                    circle.setAttribute('cy', '50');
+                    circle.setAttribute('r', r);
+                    circle.setAttribute('stroke', seg.color);
+                    circle.setAttribute('stroke-dasharray', `${len} ${circ - len}`);
+                    circle.dataset.hoverText = seg.label;
+                    circle.style.transform = `rotate(${rotation}deg)`;
+                    circle.style.transformOrigin = '50% 50%';
+                    svgEl.appendChild(circle);
+
+                    circle.addEventListener('mouseenter', () => { pctEl.textContent = seg.label; });
+                    circle.addEventListener('mouseleave', () => { pctEl.textContent = pctEl.dataset.default; });
+
+                    rotation += (seg.pct / 100) * 360;
+                }
+
+                // Update legend list
+                listEl.innerHTML = sorted.map(r =>
+                    `<div class="gus-breakdown-row">
+                        <span class="gus-dot" style="background:${r.color};"></span>
+                        <span class="gus-breakdown-name">${escapeHtml(r.name)}</span>
+                        <span class="gus-breakdown-count">${r.count}</span>
+                    </div>`
+                ).join('');
+            }
+
+            function fetchNext(index) {
+                if (index >= ALL_ELECTORATES.length) {
+                    statusEl.textContent = `Done — ${ALL_ELECTORATES.length} electorates loaded`;
+                    return;
+                }
+                const [name, id] = ALL_ELECTORATES[index];
+                const color = electorateColor(index, ALL_ELECTORATES.length);
+                fetchOneRoster(buildElectorateTree(id), function(count, err) {
+                    loaded++;
+                    if (count !== null) {
+                        results.push({ name, count, color });
+                    }
+                    statusEl.textContent = `Loading ${loaded} / ${ALL_ELECTORATES.length}...`;
+                    renderBreakdownRing();
+                    setTimeout(() => fetchNext(index + 1), 500);
+                });
+            }
+
+            fetchNext(0);
         }
 
         function updateRosterWidget() {
@@ -676,31 +879,33 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                 return;
             }
             if (rosterTotal !== null) {
-                let namedTotal = 0;
-                const segments = [];
-                for (const elec of ELECTORATES) {
-                    const count = rosterElectorates[elec.name] ?? 0;
-                    namedTotal += count;
-                    const pct = Math.min((count / ROSTER_TARGET) * 100, 100);
-                    segments.push({ color: elec.color, pct, count: count.toLocaleString() });
-                }
-                const otherCount = Math.max(rosterTotal - namedTotal, 0);
-                const otherPct = Math.min((otherCount / ROSTER_TARGET) * 100, 100);
-                if (otherCount > 0) {
-                    segments.push({ color: OTHER_COLOR, pct: otherPct, count: otherCount.toLocaleString() });
-                }
+                const heysen = rosterHeysen ?? 0;
+                const other = rosterTotal - heysen;
+                const heysenPct = Math.min((heysen / ROSTER_TARGET) * 100, 100);
+                const otherPct = Math.min((other / ROSTER_TARGET) * 100, 100 - heysenPct);
                 const totalPct = Math.round(Math.min((rosterTotal / ROSTER_TARGET) * 100, 100));
 
-                let countParts = ELECTORATES.map(e => (rosterElectorates[e.name] ?? 0).toLocaleString()).join(' + ');
+                const segments = [
+                    { color: HEYSEN_COLOR, pct: heysenPct, label: `Heysen: ${heysen}` },
+                    { color: OTHER_COLOR, pct: otherPct, label: `Other: ${other}` }
+                ];
+
                 body.innerHTML = `
-                    ${buildRingHtml(segments, totalPct)}
-                    <span class="gus-roster-count"><strong>${rosterTotal.toLocaleString()}</strong> / ${ROSTER_TARGET.toLocaleString()}</span>
+                    ${buildRingHtml(segments, totalPct + '%')}
+                    <span class="gus-roster-count"><strong>${rosterTotal.toLocaleString()}</strong> (${heysen.toLocaleString()}) / ${ROSTER_TARGET.toLocaleString()}</span>
                     <div class="gus-roster-legend">
-                        ${ELECTORATES.map(e => `<span><span class="gus-dot" style="background:${e.color};"></span>${escapeHtml(e.name)}</span>`).join('')}
+                        <span><span class="gus-dot" style="background:${HEYSEN_COLOR};"></span>Heysen</span>
                         <span><span class="gus-dot" style="background:${OTHER_COLOR};"></span>Other</span>
                     </div>
                 `;
                 attachRingHover(widget);
+
+                // Click ring to open full breakdown
+                const ring = widget.querySelector('.gus-roster-ring');
+                if (ring && !ring.dataset.gusClick) {
+                    ring.dataset.gusClick = '1';
+                    ring.addEventListener('click', () => openBreakdownPopup());
+                }
             }
         }
 
@@ -752,11 +957,11 @@ The election has now been called! We need people to hand out 'How to Vote' cards
             if (!capturedJwt) {
                 capturedJwt = scanLocalStorageForJwt();
             }
-            if (capturedJwt && rosterCount === null && !rosterLoading) {
+            if (capturedJwt && rosterTotal === null && !rosterLoading) {
                 fetchRosterCount();
             }
             rosterJwtCheckCount++;
-            if (rosterCount !== null || rosterJwtCheckCount > 30) {
+            if (rosterTotal !== null || rosterJwtCheckCount > 30) {
                 clearInterval(rosterJwtCheckInterval);
             }
         }, 2000);
