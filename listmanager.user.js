@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         List Manager Tweaks
 // @namespace    https://github.com/choujar/campaign-userscripts
-// @version      1.18.1
+// @version      1.19.0
 // @description  UX improvements for List Manager and Rocket
 // @author       Sahil Choujar
 // @match        https://listmanager.greens.org.au/*
@@ -348,8 +348,19 @@
                 align-items: center;
                 gap: 16px;
             }
+            .gus-breakdown-rings {
+                display: flex;
+                gap: 32px;
+                align-items: center;
+            }
             .gus-breakdown-ring-wrap {
                 flex-shrink: 0;
+                text-align: center;
+            }
+            .gus-breakdown-ring-label {
+                font-size: 11px;
+                color: #999;
+                margin-top: 4px;
             }
             .gus-breakdown-ring {
                 width: 180px;
@@ -357,6 +368,20 @@
             }
             .gus-breakdown-ring .gus-roster-pct {
                 font-size: 14px;
+            }
+            .gus-progress-ring {
+                width: 160px;
+                height: 160px;
+            }
+            .gus-progress-ring .gus-roster-pct {
+                font-size: 13px;
+            }
+            .gus-progress-ring .gus-ring-progress {
+                fill: none;
+                stroke: #4caf50;
+                stroke-width: 8;
+                stroke-linecap: round;
+                transition: stroke-dasharray 0.3s ease;
             }
             .gus-breakdown-list {
                 width: 100%;
@@ -774,12 +799,27 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                     <span class="gus-breakdown-close" title="Close">&times;</span>
                 </div>
                 <div class="gus-breakdown-content">
-                    <div class="gus-breakdown-ring-wrap">
-                        <div class="gus-roster-ring gus-breakdown-ring">
-                            <svg viewBox="0 0 100 100">
-                                <circle class="gus-ring-bg" cx="50" cy="50" r="40"/>
-                            </svg>
-                            <span class="gus-roster-pct" data-default="${rosterTotal?.toLocaleString() ?? '...'}">${rosterTotal?.toLocaleString() ?? '...'}</span>
+                    <div class="gus-breakdown-rings">
+                        <div class="gus-breakdown-ring-wrap">
+                            <div class="gus-roster-ring gus-breakdown-ring">
+                                <svg viewBox="0 0 100 100">
+                                    <circle class="gus-ring-bg" cx="50" cy="50" r="40"/>
+                                </svg>
+                                <span class="gus-roster-pct" data-default="${rosterTotal?.toLocaleString() ?? '...'}">${rosterTotal?.toLocaleString() ?? '...'}</span>
+                            </div>
+                            <div class="gus-breakdown-ring-label">By electorate</div>
+                        </div>
+                        <div class="gus-breakdown-ring-wrap">
+                            <div class="gus-roster-ring gus-progress-ring">
+                                <svg viewBox="0 0 100 100">
+                                    <circle class="gus-ring-bg" cx="50" cy="50" r="40"/>
+                                    <circle class="gus-ring-progress" cx="50" cy="50" r="40"
+                                        stroke-dasharray="0 251.33"
+                                        transform="rotate(-90 50 50)"/>
+                                </svg>
+                                <span class="gus-roster-pct gus-progress-pct">0%</span>
+                            </div>
+                            <div class="gus-breakdown-ring-label">Target: ${ROSTER_TARGET.toLocaleString()}</div>
                         </div>
                     </div>
                     <div class="gus-breakdown-status">Loading 0 / ${ALL_ELECTORATES.length}...</div>
@@ -795,6 +835,8 @@ The election has now been called! We need people to hand out 'How to Vote' cards
             const statusEl = popup.querySelector('.gus-breakdown-status');
             const svgEl = popup.querySelector('.gus-breakdown-ring svg');
             const pctEl = popup.querySelector('.gus-breakdown-ring .gus-roster-pct');
+            const progressArc = popup.querySelector('.gus-ring-progress');
+            const progressPct = popup.querySelector('.gus-progress-pct');
 
             const results = [];
             let loaded = 0;
@@ -842,6 +884,13 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                         <span class="gus-breakdown-count">${escapeHtml('' + r.count)}</span>
                     </div>`
                 ).join('');
+
+                // Update progress ring
+                const circ2 = 2 * Math.PI * 40;
+                const pct = Math.min((rosterTotal || 0) / ROSTER_TARGET, 1);
+                const filled = pct * circ2;
+                progressArc.setAttribute('stroke-dasharray', `${filled} ${circ2 - filled}`);
+                progressPct.textContent = `${Math.round(pct * 100)}%`;
             }
 
             // Fire one request every 100ms — steady stream, not bursty
