@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         List Manager Tweaks
 // @namespace    https://github.com/choujar/campaign-userscripts
-// @version      1.17.1
+// @version      1.18.0
 // @description  UX improvements for List Manager and Rocket
 // @author       Sahil Choujar
 // @match        https://listmanager.greens.org.au/*
@@ -329,9 +329,9 @@
             .gus-breakdown-popup {
                 background: #fff;
                 border-radius: 12px;
-                padding: 20px;
-                width: 520px;
-                max-height: 80vh;
+                padding: 20px 24px;
+                width: 700px;
+                max-height: 90vh;
                 overflow-y: auto;
                 box-shadow: 0 8px 32px rgba(0,0,0,0.3);
             }
@@ -344,8 +344,9 @@
             .gus-breakdown-close:hover { color: #333; }
             .gus-breakdown-content {
                 display: flex;
-                gap: 20px;
-                align-items: flex-start;
+                flex-direction: column;
+                align-items: center;
+                gap: 16px;
             }
             .gus-breakdown-ring-wrap {
                 flex-shrink: 0;
@@ -358,32 +359,33 @@
                 font-size: 14px;
             }
             .gus-breakdown-list {
-                flex: 1;
-                display: flex;
-                flex-direction: column;
-                gap: 2px;
-                max-height: 300px;
-                overflow-y: auto;
+                width: 100%;
+                display: grid;
+                grid-template-columns: repeat(4, 1fr);
+                gap: 2px 12px;
             }
             .gus-breakdown-row {
                 display: flex;
                 align-items: center;
                 gap: 6px;
                 padding: 2px 0;
-                font-size: 13px;
+                font-size: 12px;
             }
             .gus-breakdown-name {
                 flex: 1;
                 color: #333;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
             }
             .gus-breakdown-count {
                 font-weight: 600;
                 color: #333;
-                min-width: 28px;
+                min-width: 24px;
                 text-align: right;
             }
             .gus-breakdown-status {
-                margin-top: 12px;
+                margin-top: 8px;
                 font-size: 12px;
                 color: #999;
                 text-align: center;
@@ -767,7 +769,7 @@ The election has now been called! We need people to hand out 'How to Vote' cards
             const popup = document.createElement('div');
             popup.className = 'gus-breakdown-popup';
             popup.innerHTML = `
-                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
                     <strong style="font-size:16px;">Roster Breakdown by Electorate</strong>
                     <span class="gus-breakdown-close" title="Close">&times;</span>
                 </div>
@@ -780,9 +782,9 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                             <span class="gus-roster-pct" data-default="${rosterTotal?.toLocaleString() ?? '...'}">${rosterTotal?.toLocaleString() ?? '...'}</span>
                         </div>
                     </div>
+                    <div class="gus-breakdown-status">Loading 0 / ${ALL_ELECTORATES.length}...</div>
                     <div class="gus-breakdown-list"></div>
                 </div>
-                <div class="gus-breakdown-status">Loading 0 / ${ALL_ELECTORATES.length}...</div>
             `;
 
             popup.querySelector('.gus-breakdown-close').addEventListener('click', () => overlay.remove());
@@ -842,25 +844,31 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                 ).join('');
             }
 
-            function fetchNext(index) {
-                if (index >= ALL_ELECTORATES.length) {
-                    statusEl.textContent = `Done — ${ALL_ELECTORATES.length} electorates loaded`;
-                    return;
+            // Fire in batches of 10 to avoid overwhelming the API
+            const BATCH_SIZE = 10;
+            function fetchBatch(startIndex) {
+                const end = Math.min(startIndex + BATCH_SIZE, ALL_ELECTORATES.length);
+                for (let i = startIndex; i < end; i++) {
+                    const [name, id] = ALL_ELECTORATES[i];
+                    const color = electorateColor(i, ALL_ELECTORATES.length);
+                    fetchOneRoster(buildElectorateTree(id), function(count, err) {
+                        loaded++;
+                        if (count !== null) {
+                            results.push({ name, count, color });
+                        }
+                        statusEl.textContent = `Loading ${loaded} / ${ALL_ELECTORATES.length}...`;
+                        renderBreakdownRing();
+                        if (loaded >= ALL_ELECTORATES.length) {
+                            statusEl.textContent = `Done — ${ALL_ELECTORATES.length} electorates loaded`;
+                        }
+                    });
                 }
-                const [name, id] = ALL_ELECTORATES[index];
-                const color = electorateColor(index, ALL_ELECTORATES.length);
-                fetchOneRoster(buildElectorateTree(id), function(count, err) {
-                    loaded++;
-                    if (count !== null) {
-                        results.push({ name, count, color });
-                    }
-                    statusEl.textContent = `Loading ${loaded} / ${ALL_ELECTORATES.length}...`;
-                    renderBreakdownRing();
-                    setTimeout(() => fetchNext(index + 1), 500);
-                });
+                if (end < ALL_ELECTORATES.length) {
+                    setTimeout(() => fetchBatch(end), 200);
+                }
             }
 
-            fetchNext(0);
+            fetchBatch(0);
         }
 
         function updateRosterWidget() {
