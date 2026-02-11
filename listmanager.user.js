@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         List Manager Tweaks
 // @namespace    https://github.com/choujar/campaign-userscripts
-// @version      1.17.0
+// @version      1.17.1
 // @description  UX improvements for List Manager and Rocket
 // @author       Sahil Choujar
 // @match        https://listmanager.greens.org.au/*
@@ -713,8 +713,8 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                 const len = (seg.pct / 100) * circ;
                 if (len < 0.1) continue;
                 circles += `<circle class="gus-ring-seg" cx="50" cy="50" r="${r}"
-                    stroke="${seg.color}" stroke-dasharray="${len} ${circ - len}"
-                    data-hover-text="${seg.label}"
+                    stroke="${escapeHtml(seg.color)}" stroke-dasharray="${len} ${circ - len}"
+                    data-hover-text="${escapeHtml(seg.label)}"
                     style="transform: rotate(${rotation}deg); transform-origin: 50% 50%;"/>`;
                 rotation += (seg.pct / 100) * 360;
             }
@@ -835,9 +835,9 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                 // Update legend list
                 listEl.innerHTML = sorted.map(r =>
                     `<div class="gus-breakdown-row">
-                        <span class="gus-dot" style="background:${r.color};"></span>
+                        <span class="gus-dot" style="background:${escapeHtml(r.color)};"></span>
                         <span class="gus-breakdown-name">${escapeHtml(r.name)}</span>
-                        <span class="gus-breakdown-count">${r.count}</span>
+                        <span class="gus-breakdown-count">${escapeHtml('' + r.count)}</span>
                     </div>`
                 ).join('');
             }
