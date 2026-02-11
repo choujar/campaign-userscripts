@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         List Manager Tweaks
 // @namespace    https://github.com/choujar/campaign-userscripts
-// @version      1.15.0
+// @version      1.15.1
 // @description  UX improvements for List Manager and Rocket
 // @author       Sahil Choujar
 // @match        https://listmanager.greens.org.au/*
@@ -608,28 +608,45 @@ The election has now been called! We need people to hand out 'How to Vote' cards
             }, 2000);
         }
 
-        function buildRingHtml(heysenPct, otherPct) {
+        function buildRingHtml(heysenPct, otherPct, heysenCount, otherCount) {
             const r = 40;
             const circ = 2 * Math.PI * r;
             const heysenLen = (heysenPct / 100) * circ;
             const otherLen = (otherPct / 100) * circ;
             const totalPct = Math.round(heysenPct + otherPct);
-            // Heysen arc starts at top (rotation handled by SVG transform)
-            // Other arc starts where Heysen ends
             const otherRotation = (heysenPct / 100) * 360;
             return `
                 <div class="gus-roster-ring">
                     <svg viewBox="0 0 100 100">
                         <circle class="gus-ring-bg" cx="50" cy="50" r="${r}"/>
                         <circle class="gus-ring-fg" cx="50" cy="50" r="${r}"
-                            stroke-dasharray="${heysenLen} ${circ - heysenLen}"/>
+                            stroke-dasharray="${heysenLen} ${circ - heysenLen}"
+                            data-hover-text="${heysenCount}" style="pointer-events: stroke; cursor: pointer;"/>
                         <circle class="gus-ring-other" cx="50" cy="50" r="${r}"
                             stroke-dasharray="${otherLen} ${circ - otherLen}"
-                            style="transform: rotate(${otherRotation}deg); transform-origin: 50% 50%;"/>
+                            data-hover-text="${otherCount}"
+                            style="transform: rotate(${otherRotation}deg); transform-origin: 50% 50%; pointer-events: stroke; cursor: pointer;"/>
                     </svg>
-                    <span class="gus-roster-pct">${totalPct}%</span>
+                    <span class="gus-roster-pct" data-default="${totalPct}%">${totalPct}%</span>
                 </div>
             `;
+        }
+
+        function attachRingHover(widget) {
+            const ring = widget.querySelector('.gus-roster-ring');
+            if (!ring || ring.dataset.gusHover) return;
+            ring.dataset.gusHover = '1';
+            const pctEl = ring.querySelector('.gus-roster-pct');
+            if (!pctEl) return;
+            const defaultText = pctEl.dataset.default;
+            ring.querySelectorAll('circle[data-hover-text]').forEach(circle => {
+                circle.addEventListener('mouseenter', () => {
+                    pctEl.textContent = circle.dataset.hoverText;
+                });
+                circle.addEventListener('mouseleave', () => {
+                    pctEl.textContent = defaultText;
+                });
+            });
         }
 
         function updateRosterWidget() {
@@ -653,13 +670,14 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                 const heysenPct = Math.min((heysen / ROSTER_TARGET) * 100, 100);
                 const otherPct = Math.min((other / ROSTER_TARGET) * 100, 100 - heysenPct);
                 body.innerHTML = `
-                    ${buildRingHtml(heysenPct, otherPct)}
+                    ${buildRingHtml(heysenPct, otherPct, heysen.toLocaleString(), other.toLocaleString())}
                     <span class="gus-roster-count"><strong>${rosterTotal.toLocaleString()}</strong> (${heysen.toLocaleString()}) / ${ROSTER_TARGET.toLocaleString()}</span>
                     <div class="gus-roster-legend">
                         <span><span class="gus-dot" style="background:#2e7d32;"></span>Heysen</span>
                         <span><span class="gus-dot" style="background:#5c9dc4;"></span>Other</span>
                     </div>
                 `;
+                attachRingHover(widget);
             }
         }
 
