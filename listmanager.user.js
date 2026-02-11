@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         List Manager Tweaks
 // @namespace    https://github.com/choujar/campaign-userscripts
-// @version      1.18.0
+// @version      1.18.1
 // @description  UX improvements for List Manager and Rocket
 // @author       Sahil Choujar
 // @match        https://listmanager.greens.org.au/*
@@ -844,13 +844,10 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                 ).join('');
             }
 
-            // Fire in batches of 10 to avoid overwhelming the API
-            const BATCH_SIZE = 10;
-            function fetchBatch(startIndex) {
-                const end = Math.min(startIndex + BATCH_SIZE, ALL_ELECTORATES.length);
-                for (let i = startIndex; i < end; i++) {
-                    const [name, id] = ALL_ELECTORATES[i];
-                    const color = electorateColor(i, ALL_ELECTORATES.length);
+            // Fire one request every 100ms — steady stream, not bursty
+            ALL_ELECTORATES.forEach(([name, id], i) => {
+                const color = electorateColor(i, ALL_ELECTORATES.length);
+                setTimeout(() => {
                     fetchOneRoster(buildElectorateTree(id), function(count, err) {
                         loaded++;
                         if (count !== null) {
@@ -862,13 +859,8 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                             statusEl.textContent = `Done — ${ALL_ELECTORATES.length} electorates loaded`;
                         }
                     });
-                }
-                if (end < ALL_ELECTORATES.length) {
-                    setTimeout(() => fetchBatch(end), 200);
-                }
-            }
-
-            fetchBatch(0);
+                }, i * 100);
+            });
         }
 
         function updateRosterWidget() {
