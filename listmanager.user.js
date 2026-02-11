@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         List Manager Tweaks
 // @namespace    https://github.com/choujar/campaign-userscripts
-// @version      1.14.1
+// @version      1.14.2
 // @description  UX improvements for List Manager and Rocket
 // @author       Sahil Choujar
 // @match        https://listmanager.greens.org.au/*
@@ -1794,7 +1794,7 @@ The election has now been called! We need people to hand out 'How to Vote' cards
             panelBody.appendChild(wrap);
         }
 
-        const DEFAULT_NOTE_CHIPS = ['left vm', 'sent text', 'no answer', 'rostered'];
+        const DEFAULT_NOTE_CHIPS = ['re HTV', 'left vm', 'sent text', 'rostered'];
 
         function getNoteChips() {
             try {
