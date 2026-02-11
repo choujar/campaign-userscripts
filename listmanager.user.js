@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         List Manager Tweaks
 // @namespace    https://github.com/choujar/campaign-userscripts
-// @version      1.19.1
+// @version      1.20.0
 // @description  UX improvements for List Manager and Rocket
 // @author       Sahil Choujar
 // @match        https://listmanager.greens.org.au/*
@@ -415,6 +415,20 @@
                 color: #999;
                 text-align: center;
             }
+            .gus-breakdown-refresh {
+                background: none;
+                border: 1px solid #ccc;
+                border-radius: 4px;
+                color: #666;
+                cursor: pointer;
+                font-size: 11px;
+                padding: 2px 8px;
+                margin-left: 6px;
+            }
+            .gus-breakdown-refresh:hover {
+                background: #f0f0f0;
+                color: #333;
+            }
         `);
 
         // --- Template manager styles ---
@@ -594,6 +608,7 @@ The election has now been called! We need people to hand out 'How to Vote' cards
         let rosterTotal = null;
         let rosterHeysen = null;
         let rosterLoading = false;
+        let breakdownCache = null; // { results: [...], timestamp: Date.now() }
         let rosterError = null;
 
         const ALL_ELECTORATES = [
@@ -838,11 +853,8 @@ The election has now been called! We need people to hand out 'How to Vote' cards
             const progressArc = popup.querySelector('.gus-ring-progress');
             const progressPct = popup.querySelector('.gus-progress-pct');
 
-            const results = [];
-            let loaded = 0;
-
-            function renderBreakdownRing() {
-                const sorted = [...results].sort((a, b) => b.count - a.count);
+            function renderBreakdownRing(resultData) {
+                const sorted = [...resultData].sort((a, b) => b.count - a.count);
                 svgEl.querySelectorAll('.gus-ring-seg').forEach(el => el.remove());
 
                 const total = rosterTotal || 1;
@@ -893,23 +905,55 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                 progressPct.textContent = `${Math.round(pct * 100)}%`;
             }
 
-            // Fire one request every 100ms — steady stream, not bursty
-            ALL_ELECTORATES.forEach(([name, id], i) => {
-                const color = electorateColor(i, ALL_ELECTORATES.length);
-                setTimeout(() => {
-                    fetchOneRoster(buildElectorateTree(id), function(count, err) {
-                        loaded++;
-                        if (count !== null) {
-                            results.push({ name, count, color });
-                        }
-                        statusEl.textContent = `Loading ${loaded} / ${ALL_ELECTORATES.length}...`;
-                        renderBreakdownRing();
-                        if (loaded >= ALL_ELECTORATES.length) {
-                            statusEl.textContent = `${ALL_ELECTORATES.length} electorates loaded`;
-                        }
+            function cacheAgeText(ts) {
+                const mins = Math.floor((Date.now() - ts) / 60000);
+                if (mins < 1) return 'just now';
+                return mins === 1 ? '1 min ago' : `${mins} min ago`;
+            }
+
+            function showStatus(text, showRefresh) {
+                statusEl.innerHTML = escapeHtml(text) +
+                    (showRefresh ? ' <button class="gus-breakdown-refresh">Refresh</button>' : '');
+                if (showRefresh) {
+                    statusEl.querySelector('.gus-breakdown-refresh').addEventListener('click', () => {
+                        breakdownCache = null;
+                        fetchAllElectorates();
                     });
-                }, i * 100);
-            });
+                }
+            }
+
+            function fetchAllElectorates() {
+                const results = [];
+                let loaded = 0;
+                showStatus(`Loading 0 / ${ALL_ELECTORATES.length}...`, false);
+
+                ALL_ELECTORATES.forEach(([name, id], i) => {
+                    const color = electorateColor(i, ALL_ELECTORATES.length);
+                    setTimeout(() => {
+                        fetchOneRoster(buildElectorateTree(id), function(count, err) {
+                            loaded++;
+                            if (count !== null) {
+                                results.push({ name, count, color });
+                            }
+                            statusEl.textContent = `Loading ${loaded} / ${ALL_ELECTORATES.length}...`;
+                            renderBreakdownRing(results);
+                            if (loaded >= ALL_ELECTORATES.length) {
+                                breakdownCache = { results: [...results], timestamp: Date.now() };
+                                showStatus(`${ALL_ELECTORATES.length} electorates loaded — ${cacheAgeText(breakdownCache.timestamp)}`, true);
+                            }
+                        });
+                    }, i * 100);
+                });
+            }
+
+            // Use cache if fresh (< 30 min), otherwise fetch
+            const CACHE_TTL = 30 * 60 * 1000;
+            if (breakdownCache && (Date.now() - breakdownCache.timestamp) < CACHE_TTL) {
+                renderBreakdownRing(breakdownCache.results);
+                showStatus(`${ALL_ELECTORATES.length} electorates loaded — ${cacheAgeText(breakdownCache.timestamp)}`, true);
+            } else {
+                fetchAllElectorates();
+            }
         }
 
         function updateRosterWidget() {
