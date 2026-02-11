@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         List Manager Tweaks
 // @namespace    https://github.com/choujar/campaign-userscripts
-// @version      1.15.1
+// @version      1.15.2
 // @description  UX improvements for List Manager and Rocket
 // @author       Sahil Choujar
 // @match        https://listmanager.greens.org.au/*
@@ -495,17 +495,17 @@ The election has now been called! We need people to hand out 'How to Vote' cards
 
         // --- Roster count tracker ---
         const ROSTER_TARGET = 1601;
-        const HEYSEN_GEO_ID = 145441;
+        const HEYSEN_ELECTORATE_ID = 140532;
         let rosterTotal = null;
         let rosterHeysen = null;
         let rosterLoading = false;
         let rosterError = null;
 
-        function buildRosterTree(geoId, operator) {
+        function buildTotalTree() {
             return JSON.stringify({
                 op: 'intersection',
                 nodes: [
-                    { op: 'filter', filter: { name: 'geometryIds', value: [geoId], operator: operator } },
+                    { op: 'filter', filter: { name: 'geometryIds', value: [6], operator: 'lives in' } },
                     { op: 'filter', filter: { name: 'roster', value: { electionId: 182, electorateIds: [], rosterTypes: ['Rostered'], shiftStatus: 'Confirmed', votingPeriod: 'Polling Day' } } }
                 ],
                 printTime: false,
@@ -513,8 +513,18 @@ The election has now been called! We need people to hand out 'How to Vote' cards
             });
         }
 
-        function fetchOneRoster(geoId, operator, cb) {
-            const tree = buildRosterTree(geoId, operator);
+        function buildHeysenTree() {
+            return JSON.stringify({
+                op: 'intersection',
+                nodes: [
+                    { op: 'filter', filter: { name: 'roster', value: { electionId: 182, electorateIds: [HEYSEN_ELECTORATE_ID], rosterTypes: ['Rostered'], shiftStatus: 'Confirmed', votingPeriod: 'Polling Day' } } }
+                ],
+                printTime: false,
+                useAdvancedSearchII: false
+            });
+        }
+
+        function fetchOneRoster(tree, cb) {
             const url = 'https://api.listmanager.greens.org.au/advsearch/preview?domainCode=sa&tree=' + encodeURIComponent(tree);
             GM_xmlhttpRequest({
                 method: 'GET',
@@ -569,14 +579,14 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                 if (callback) callback(rosterTotal, rosterError);
             }
 
-            fetchOneRoster(6, 'lives in', function(count, err) {
+            fetchOneRoster(buildTotalTree(), function(count, err) {
                 if (err === 'auth_expired') { authExpired = true; }
                 else if (err) { rosterError = err; }
                 else { rosterTotal = count; }
                 checkDone();
             });
 
-            fetchOneRoster(HEYSEN_GEO_ID, 'placement in', function(count, err) {
+            fetchOneRoster(buildHeysenTree(), function(count, err) {
                 if (err === 'auth_expired') { authExpired = true; }
                 else if (err) { if (!rosterError) rosterError = err; }
                 else { rosterHeysen = count; }
