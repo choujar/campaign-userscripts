@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         List Manager Tweaks
 // @namespace    https://github.com/choujar/campaign-userscripts
-// @version      1.22.0
+// @version      1.22.1
 // @description  UX improvements for List Manager and Rocket
 // @author       Sahil Choujar
 // @match        https://listmanager.greens.org.au/*
@@ -1100,7 +1100,7 @@ The election has now been called! We need people to hand out 'How to Vote' cards
     if (IS_ROCKET) {
 
         GM_addStyle(`
-            .gus-sms-link, .gus-copy-phone {
+            .gus-sms-link, .gus-copy-phone, .gus-copy-email {
                 display: inline-flex;
                 align-items: center;
                 justify-content: center;
@@ -1113,7 +1113,7 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                 transition: background 0.15s;
                 border: none;
             }
-            .gus-sms-link svg, .gus-copy-phone svg {
+            .gus-sms-link svg, .gus-copy-phone svg, .gus-copy-email svg {
                 width: 14px;
                 height: 14px;
             }
@@ -1138,8 +1138,15 @@ The election has now been called! We need people to hand out 'How to Vote' cards
             .gus-copy-phone:hover {
                 background: #0d47a1;
             }
-            .gus-copy-phone.gus-copied {
+            .gus-copy-phone.gus-copied, .gus-copy-email.gus-copied {
                 background: #2e7d32;
+            }
+            .gus-copy-email {
+                background: #1565c0;
+                color: #fff;
+            }
+            .gus-copy-email:hover {
+                background: #0d47a1;
             }
             .gus-electorate-select {
                 font-size: 14px;
@@ -1964,6 +1971,35 @@ The election has now been called! We need people to hand out 'How to Vote' cards
             });
         }
 
+        function injectEmailCopyButtons() {
+            const copySvg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>';
+            const checkSvg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>';
+
+            document.querySelectorAll('li[ng-repeat*="email in"] > span').forEach(span => {
+                if (span.querySelector('.gus-copy-email')) return;
+                const emailText = span.childNodes[0]?.textContent?.trim();
+                if (!emailText || !emailText.includes('@')) return;
+
+                const copyLink = document.createElement('span');
+                copyLink.className = 'gus-copy-email';
+                copyLink.innerHTML = copySvg;
+                copyLink.title = 'Copy email address';
+                copyLink.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    copyToClipboard(emailText).then(() => {
+                        copyLink.innerHTML = checkSvg;
+                        copyLink.classList.add('gus-copied');
+                        setTimeout(() => { copyLink.innerHTML = copySvg; copyLink.classList.remove('gus-copied'); }, 1500);
+                    });
+                });
+
+                const icons = span.querySelector('span[agc-civi-icons]');
+                if (icons) icons.after(copyLink);
+                else span.appendChild(copyLink);
+            });
+        }
+
         const ELECTORATES = [
             ['Adelaide', 140511], ['Badcoe', 140512], ['Black', 140513],
             ['Bragg', 140514], ['Chaffey', 140515], ['Cheltenham', 140516],
@@ -2384,6 +2420,7 @@ The election has now been called! We need people to hand out 'How to Vote' cards
 
         const rocketObserver = new MutationObserver(() => {
             injectSmsLinks();
+            injectEmailCopyButtons();
             injectElectorateDropdown();
             convertShiftTimes();
             prefetchElectorate();
@@ -2393,6 +2430,7 @@ The election has now been called! We need people to hand out 'How to Vote' cards
         rocketObserver.observe(document.body, { childList: true, subtree: true });
 
         injectSmsLinks();
+        injectEmailCopyButtons();
         injectElectorateDropdown();
         convertShiftTimes();
         prefetchElectorate();
