@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         List Manager Tweaks
 // @namespace    https://github.com/choujar/campaign-userscripts
-// @version      1.20.2
+// @version      1.21.0
 // @description  UX improvements for List Manager and Rocket
 // @author       Sahil Choujar
 // @match        https://listmanager.greens.org.au/*
@@ -2158,10 +2158,40 @@ The election has now been called! We need people to hand out 'How to Vote' cards
             GM_setValue('gus_note_chips', JSON.stringify(chips.slice(0, 4)));
         }
 
+        const DATE_FORMATS = [
+            { value: 'd/m', label: 'd/m', fn: d => d.getDate() + '/' + (d.getMonth() + 1) },
+            { value: 'dd/mm', label: 'dd/mm', fn: d => String(d.getDate()).padStart(2, '0') + '/' + String(d.getMonth() + 1).padStart(2, '0') },
+            { value: 'd/m/yy', label: 'd/m/yy', fn: d => d.getDate() + '/' + (d.getMonth() + 1) + '/' + String(d.getFullYear()).slice(2) },
+            { value: 'dd/mm/yy', label: 'dd/mm/yy', fn: d => String(d.getDate()).padStart(2, '0') + '/' + String(d.getMonth() + 1).padStart(2, '0') + '/' + String(d.getFullYear()).slice(2) },
+        ];
+
+        function getDateSettings() {
+            try {
+                const saved = GM_getValue('gus_date_settings');
+                if (saved) return JSON.parse(saved);
+            } catch (e) {}
+            return { format: 'd/m', sep: ', ' };
+        }
+
+        function saveDateSettings(settings) {
+            GM_setValue('gus_date_settings', JSON.stringify(settings));
+        }
+
+        function formatDate(fmt) {
+            const now = new Date();
+            const entry = DATE_FORMATS.find(f => f.value === fmt) || DATE_FORMATS[0];
+            return entry.fn(now);
+        }
+
         function appendToNotes(textarea, text) {
-            const cur = textarea.value.trim();
-            if (cur) {
-                textarea.value = cur + ', ' + text;
+            const cur = textarea.value;
+            if (cur && cur.trim()) {
+                // If text already ends with non-alphanumeric separator (e.g. " - ", ", "), just append
+                if (/[^\w]\s*$/.test(cur)) {
+                    textarea.value = cur.replace(/\s*$/, '') + ' ' + text;
+                } else {
+                    textarea.value = cur.trimEnd() + ', ' + text;
+                }
             } else {
                 textarea.value = text;
             }
@@ -2192,11 +2222,20 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                 // Date chip
                 const dateChip = document.createElement('span');
                 dateChip.className = 'gus-note-chip gus-note-chip-date';
-                const now = new Date();
-                const dateStr = now.getDate() + '/' + (now.getMonth() + 1);
+                const ds = getDateSettings();
+                const dateStr = formatDate(ds.format);
                 dateChip.textContent = dateStr;
                 dateChip.title = 'Insert today\'s date';
-                dateChip.addEventListener('click', () => appendToNotes(textarea, dateStr));
+                dateChip.addEventListener('click', () => {
+                    const cur = textarea.value;
+                    if (cur && cur.trim()) {
+                        appendToNotes(textarea, dateStr);
+                    } else {
+                        textarea.value = dateStr + ds.sep;
+                        textarea.dispatchEvent(new Event('input', { bubbles: true }));
+                        textarea.dispatchEvent(new Event('change', { bubbles: true }));
+                    }
+                });
                 container.appendChild(dateChip);
 
                 // Action chips
@@ -2246,6 +2285,55 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                     row.appendChild(inp);
                     editorEl.appendChild(row);
                 }
+                // Date settings
+                const curDs = getDateSettings();
+                const dateDivider = document.createElement('div');
+                dateDivider.style.cssText = 'border-top: 1px solid #444; margin: 4px 0; padding-top: 6px; font-size: 11px; color: #888;';
+                dateDivider.textContent = 'Date format';
+                editorEl.appendChild(dateDivider);
+
+                const fmtRow = document.createElement('div');
+                fmtRow.className = 'gus-chips-editor-row';
+                const fmtLabel = document.createElement('span');
+                fmtLabel.style.cssText = 'font-size: 11px; color: #999; min-width: 50px;';
+                fmtLabel.textContent = 'Format';
+                const fmtSelect = document.createElement('select');
+                fmtSelect.style.cssText = 'padding: 2px 4px; border: 1px solid #555; border-radius: 3px; background: #3a3a3a; color: #ccc; font-size: 12px;';
+                for (const f of DATE_FORMATS) {
+                    const opt = document.createElement('option');
+                    opt.value = f.value;
+                    opt.textContent = f.label + ' \u2192 ' + f.fn(new Date());
+                    if (f.value === curDs.format) opt.selected = true;
+                    fmtSelect.appendChild(opt);
+                }
+                fmtRow.appendChild(fmtLabel);
+                fmtRow.appendChild(fmtSelect);
+                editorEl.appendChild(fmtRow);
+
+                const sepRow = document.createElement('div');
+                sepRow.className = 'gus-chips-editor-row';
+                const sepLabel = document.createElement('span');
+                sepLabel.style.cssText = 'font-size: 11px; color: #999; min-width: 50px;';
+                sepLabel.textContent = 'After';
+                const sepInput = document.createElement('input');
+                sepInput.type = 'text';
+                sepInput.value = curDs.sep;
+                sepInput.placeholder = ', ';
+                sepInput.style.width = '60px';
+                const sepPreview = document.createElement('span');
+                sepPreview.style.cssText = 'font-size: 11px; color: #7cb342; margin-left: 4px;';
+                function updatePreview() {
+                    const fmt = DATE_FORMATS.find(f => f.value === fmtSelect.value) || DATE_FORMATS[0];
+                    sepPreview.textContent = fmt.fn(new Date()) + (sepInput.value || ', ') + 'Called';
+                }
+                updatePreview();
+                fmtSelect.addEventListener('change', updatePreview);
+                sepInput.addEventListener('input', updatePreview);
+                sepRow.appendChild(sepLabel);
+                sepRow.appendChild(sepInput);
+                sepRow.appendChild(sepPreview);
+                editorEl.appendChild(sepRow);
+
                 const btns = document.createElement('div');
                 btns.className = 'gus-chips-btns';
                 const cancelBtn = document.createElement('button');
@@ -2261,6 +2349,7 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                 saveBtn.addEventListener('click', () => {
                     const newChips = rows.map(r => ({ label: r.inp.value.trim(), visible: r.toggle.checked })).filter(c => c.label);
                     saveNoteChips(newChips);
+                    saveDateSettings({ format: fmtSelect.value, sep: sepInput.value || ', ' });
                     editorEl.remove();
                     editorEl = null;
                     buildChips();
