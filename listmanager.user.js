@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         List Manager Tweaks
 // @namespace    https://github.com/choujar/campaign-userscripts
-// @version      1.21.0
+// @version      1.22.0
 // @description  UX improvements for List Manager and Rocket
 // @author       Sahil Choujar
 // @match        https://listmanager.greens.org.au/*
@@ -1190,6 +1190,10 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                 border-radius: 3px;
                 font-weight: 500;
             }
+            .gus-modal .gus-preview .gus-fallback {
+                background: #e3f2fd;
+                color: #1565c0;
+            }
             .gus-electorate-row {
                 margin-top: 2px;
             }
@@ -1630,42 +1634,50 @@ The election has now been called! We need people to hand out 'How to Vote' cards
             return points;
         }
 
-        function findElectorate(address, callback) {
-            geocodeAddress(address, (lat, lng) => {
-                if (lat === null) {
-                    callback(null);
-                    return;
-                }
-                debugLog('Geocoded successfully');
+        function getCoordsFromDom() {
+            const mapLink = document.querySelector('span[agc-maplink] a[href*="maps.google.com"]');
+            if (!mapLink) return null;
+            const match = mapLink.href.match(/[?&]q=([-\d.]+),([-\d.]+)/);
+            if (!match) return null;
+            const lat = parseFloat(match[1]), lng = parseFloat(match[2]);
+            if (isNaN(lat) || isNaN(lng) || (lat === 0 && lng === 0)) return null;
+            return { lat, lng };
+        }
 
-                loadEcsaData((districts) => {
-                    if (!districts) {
-                        callback(null);
-                        return;
-                    }
-
-                    for (const district of districts) {
-                        if (district.name === 'All Districts') continue;
-
-                        try {
-                            for (const encodedPath of district.paths) {
-                                const polygon = decodePolyline(encodedPath);
-                                if (pointInPolygon(lat, lng, polygon)) {
-                                    const name = district.name.charAt(0).toUpperCase() +
-                                        district.name.slice(1).toLowerCase();
-                                    debugLog('Found electorate:', name);
-                                    callback(name);
-                                    return;
-                                }
+        function matchElectorate(lat, lng, callback) {
+            loadEcsaData((districts) => {
+                if (!districts) { callback(null); return; }
+                for (const district of districts) {
+                    if (district.name === 'All Districts') continue;
+                    try {
+                        for (const encodedPath of district.paths) {
+                            const polygon = decodePolyline(encodedPath);
+                            if (pointInPolygon(lat, lng, polygon)) {
+                                const name = district.name.charAt(0).toUpperCase() +
+                                    district.name.slice(1).toLowerCase();
+                                callback(name);
+                                return;
                             }
-                        } catch (e) {
-                            // Skip malformed districts
                         }
-                    }
+                    } catch (e) {}
+                }
+                callback(null);
+            });
+        }
 
-                    debugLog('No electorate found for location');
-                    callback(null);
-                });
+        function findElectorate(address, callback) {
+            // Try DOM coords first (NationBuilder already geocoded the address)
+            const domCoords = getCoordsFromDom();
+            if (domCoords) {
+                debugLog('Using coords from DOM map link');
+                matchElectorate(domCoords.lat, domCoords.lng, callback);
+                return;
+            }
+            // Fall back to Nominatim geocoding
+            geocodeAddress(address, (lat, lng) => {
+                if (lat === null) { callback(null); return; }
+                debugLog('Geocoded via Nominatim');
+                matchElectorate(lat, lng, callback);
             });
         }
 
@@ -1739,16 +1751,19 @@ The election has now been called! We need people to hand out 'How to Vote' cards
             return a && b && a.toLowerCase() === b.toLowerCase();
         }
 
+        const FALLBACK_REGION = 'South Australia';
+
         function fillTemplate(template, name, suburb, electorate, yourName) {
             let filled = template;
-            if (sameIgnoreCase(electorate, suburb)) {
+            const eVal = electorate || FALLBACK_REGION;
+            const sVal = suburb || '';
+            if (sameIgnoreCase(eVal, sVal) || !sVal) {
                 filled = filled.replace(/\[electorate\]\s*\(\s*\[suburb\]\s*\)/gi, '[electorate]');
             }
             filled = filled.replace(/\[their name\]/gi, name || '');
             filled = filled.replace(/\[your name\]/gi, yourName || '');
-            filled = filled.replace(/\[suburb\]/gi, suburb || '');
-            filled = filled.replace(/\[electorate\]/gi, electorate || '');
-            // Clean up empty parentheses and extra whitespace left by stripped placeholders
+            filled = filled.replace(/\[suburb\]/gi, sVal || eVal);
+            filled = filled.replace(/\[electorate\]/gi, eVal);
             filled = filled.replace(/\s*\(\s*\)\s*/g, ' ');
             filled = filled.replace(/  +/g, ' ');
             return filled.trim();
@@ -1756,7 +1771,9 @@ The election has now been called! We need people to hand out 'How to Vote' cards
 
         function fillTemplateForPreview(template, name, suburb, electorate, yourName) {
             let tmpl = template;
-            if (sameIgnoreCase(electorate, suburb)) {
+            const eVal = electorate || FALLBACK_REGION;
+            const sVal = suburb || '';
+            if (sameIgnoreCase(eVal, sVal) || !sVal) {
                 tmpl = tmpl.replace(/\[electorate\]\s*\(\s*\[suburb\]\s*\)/gi, '[electorate]');
             }
             let html = tmpl
@@ -1770,12 +1787,13 @@ The election has now been called! We need people to hand out 'How to Vote' cards
             html = html.replace(/\[your name\]/gi, yourName
                 ? `<span class="gus-filled">${escapeHtml(yourName)}</span>`
                 : '<span class="gus-placeholder">[your name]</span>');
+            const subVal = sVal || eVal;
             html = html.replace(/\[suburb\]/gi, suburb
                 ? `<span class="gus-filled">${escapeHtml(suburb)}</span>`
-                : '<span class="gus-placeholder">[suburb]</span>');
+                : `<span class="gus-filled gus-fallback">${escapeHtml(subVal)}</span>`);
             html = html.replace(/\[electorate\]/gi, electorate
                 ? `<span class="gus-filled">${escapeHtml(electorate)}</span>`
-                : '<span class="gus-placeholder">[electorate]</span>');
+                : `<span class="gus-filled gus-fallback">${escapeHtml(eVal)}</span>`);
 
             html = html.replace(/\[([^\]]+)\]/g, '<span class="gus-placeholder">[$1]</span>');
 
