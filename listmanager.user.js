@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         List Manager Tweaks
 // @namespace    https://github.com/choujar/campaign-userscripts
-// @version      1.22.1
+// @version      1.22.2
 // @description  UX improvements for List Manager and Rocket
 // @author       Sahil Choujar
 // @match        https://listmanager.greens.org.au/*
@@ -1673,18 +1673,21 @@ The election has now been called! We need people to hand out 'How to Vote' cards
         }
 
         function findElectorate(address, callback) {
-            // Try DOM coords first (NationBuilder already geocoded the address)
-            const domCoords = getCoordsFromDom();
-            if (domCoords) {
-                debugLog('Using coords from DOM map link');
-                matchElectorate(domCoords.lat, domCoords.lng, callback);
-                return;
-            }
-            // Fall back to Nominatim geocoding
+            // Prefer Nominatim geocoding of the actual address text (more accurate)
             geocodeAddress(address, (lat, lng) => {
-                if (lat === null) { callback(null); return; }
-                debugLog('Geocoded via Nominatim');
-                matchElectorate(lat, lng, callback);
+                if (lat !== null) {
+                    debugLog('Geocoded via Nominatim');
+                    matchElectorate(lat, lng, callback);
+                    return;
+                }
+                // Fall back to DOM coords (NationBuilder's pre-geocoded point)
+                const domCoords = getCoordsFromDom();
+                if (domCoords) {
+                    debugLog('Nominatim failed, using DOM map link coords');
+                    matchElectorate(domCoords.lat, domCoords.lng, callback);
+                    return;
+                }
+                callback(null);
             });
         }
 
