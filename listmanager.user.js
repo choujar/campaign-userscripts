@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         List Manager Tweaks
 // @namespace    https://github.com/choujar/campaign-userscripts
-// @version      1.23.0
+// @version      1.23.1
 // @description  UX improvements for List Manager and Rocket
 // @author       Sahil Choujar
 // @match        https://listmanager.greens.org.au/*
@@ -1083,17 +1083,122 @@ The election has now been called! We need people to hand out 'How to Vote' cards
             }
         }
 
+        // --- Quick action buttons (No Answer / MI) ---
+        GM_addStyle(`
+            .gus-quick-actions {
+                display: inline-flex;
+                gap: 6px;
+                margin-left: 6px;
+                align-items: center;
+            }
+            .gus-quick-btn {
+                padding: 5px 14px;
+                border-radius: 4px;
+                font-size: 13px;
+                font-weight: 500;
+                cursor: pointer;
+                border: 1px solid;
+                transition: background 0.15s, opacity 0.15s;
+                font-family: inherit;
+                line-height: 1.5;
+                white-space: nowrap;
+            }
+            .gus-quick-btn:disabled {
+                opacity: 0.5;
+                cursor: not-allowed;
+            }
+            .gus-quick-btn-na {
+                background: #fff;
+                color: #d32f2f;
+                border-color: #d32f2f;
+            }
+            .gus-quick-btn-na:hover:not(:disabled) {
+                background: #ffebee;
+            }
+            .gus-quick-btn-mi {
+                background: #fff;
+                color: #2e7d32;
+                border-color: #2e7d32;
+            }
+            .gus-quick-btn-mi:hover:not(:disabled) {
+                background: #e8f5e9;
+            }
+        `);
+
+        function injectQuickActions() {
+            const skipBtn = Array.from(document.querySelectorAll('button.MuiButton-outlined')).find(b => b.textContent.trim() === 'Skip');
+            if (!skipBtn) return;
+            if (skipBtn.parentElement.querySelector('.gus-quick-actions')) return;
+
+            const wrap = document.createElement('span');
+            wrap.className = 'gus-quick-actions';
+
+            const ACTIONS = [
+                { label: 'No Answer', value: 'No answer', cls: 'gus-quick-btn-na' },
+                { label: 'MI', value: 'Meaningful interaction', cls: 'gus-quick-btn-mi' },
+            ];
+
+            ACTIONS.forEach(action => {
+                const btn = document.createElement('button');
+                btn.className = 'gus-quick-btn ' + action.cls;
+                btn.textContent = action.label;
+                btn.title = action.value;
+                btn.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    btn.disabled = true;
+                    btn.textContent = '...';
+
+                    const selectDiv = document.querySelector('div[role="combobox"].MuiSelect-select');
+                    const nativeInput = document.querySelector('input.MuiSelect-nativeInput');
+                    if (!selectDiv || !nativeInput) {
+                        btn.textContent = action.label;
+                        btn.disabled = false;
+                        debugLog('Quick action: could not find MUI Select');
+                        return;
+                    }
+
+                    selectDiv.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+
+                    setTimeout(() => {
+                        const option = document.querySelector(`li[role="option"][data-value="${action.value}"]`);
+                        if (option) {
+                            option.click();
+                            setTimeout(() => {
+                                const saveBtn = Array.from(document.querySelectorAll('button.MuiButton-contained')).find(b => b.textContent.trim() === 'Save');
+                                if (saveBtn) {
+                                    saveBtn.click();
+                                    debugLog('Quick action: set', action.value, 'and saved');
+                                }
+                                btn.textContent = action.label;
+                                btn.disabled = false;
+                            }, 100);
+                        } else {
+                            debugLog('Quick action: option not found:', action.value);
+                            document.body.click();
+                            btn.textContent = action.label;
+                            btn.disabled = false;
+                        }
+                    }, 150);
+                });
+                wrap.appendChild(btn);
+            });
+
+            skipBtn.after(wrap);
+        }
+
         const lmObserver = new MutationObserver(() => {
             checkNavigation();
             injectButton();
             injectVersionBadge();
             injectRosterWidget();
+            injectQuickActions();
         });
         lmObserver.observe(document.body, { childList: true, subtree: true });
 
         injectButton();
         injectVersionBadge();
         injectRosterWidget();
+        injectQuickActions();
     }
 
     // --- Rocket ---
@@ -1395,44 +1500,6 @@ The election has now been called! We need people to hand out 'How to Vote' cards
             }
             .gus-chips-cancel:hover {
                 background: #666;
-            }
-            .gus-quick-actions {
-                display: inline-flex;
-                gap: 6px;
-                margin-left: 6px;
-                align-items: center;
-            }
-            .gus-quick-btn {
-                padding: 5px 14px;
-                border-radius: 4px;
-                font-size: 13px;
-                font-weight: 500;
-                cursor: pointer;
-                border: 1px solid;
-                transition: background 0.15s, opacity 0.15s;
-                font-family: inherit;
-                line-height: 1.5;
-                white-space: nowrap;
-            }
-            .gus-quick-btn:disabled {
-                opacity: 0.5;
-                cursor: not-allowed;
-            }
-            .gus-quick-btn-na {
-                background: #fff;
-                color: #d32f2f;
-                border-color: #d32f2f;
-            }
-            .gus-quick-btn-na:hover:not(:disabled) {
-                background: #ffebee;
-            }
-            .gus-quick-btn-mi {
-                background: #fff;
-                color: #2e7d32;
-                border-color: #2e7d32;
-            }
-            .gus-quick-btn-mi:hover:not(:disabled) {
-                background: #e8f5e9;
             }
         `);
 
@@ -2459,74 +2526,6 @@ The election has now been called! We need people to hand out 'How to Vote' cards
             textarea.parentElement.insertBefore(container, textarea);
         }
 
-        function injectQuickActions() {
-            // Find the Skip button (outlined MUI button with text "Skip")
-            const skipBtn = Array.from(document.querySelectorAll('button.MuiButton-outlined')).find(b => b.textContent.trim() === 'Skip');
-            if (!skipBtn) return;
-            if (skipBtn.parentElement.querySelector('.gus-quick-actions')) return;
-
-            const wrap = document.createElement('span');
-            wrap.className = 'gus-quick-actions';
-
-            const ACTIONS = [
-                { label: 'No Answer', value: 'No answer', cls: 'gus-quick-btn-na' },
-                { label: 'MI', value: 'Meaningful interaction', cls: 'gus-quick-btn-mi' },
-            ];
-
-            ACTIONS.forEach(action => {
-                const btn = document.createElement('button');
-                btn.className = 'gus-quick-btn ' + action.cls;
-                btn.textContent = action.label;
-                btn.title = action.value;
-                btn.addEventListener('click', (e) => {
-                    e.preventDefault();
-                    btn.disabled = true;
-                    btn.textContent = '...';
-
-                    // Find the MUI Select trigger and the hidden native input
-                    const selectDiv = document.querySelector('div[role="combobox"].MuiSelect-select');
-                    const nativeInput = document.querySelector('input.MuiSelect-nativeInput');
-                    if (!selectDiv || !nativeInput) {
-                        btn.textContent = action.label;
-                        btn.disabled = false;
-                        debugLog('Quick action: could not find MUI Select');
-                        return;
-                    }
-
-                    // Open the dropdown by clicking the select trigger
-                    selectDiv.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
-
-                    // Wait for the dropdown menu to appear, then click the right option
-                    setTimeout(() => {
-                        const option = document.querySelector(`li[role="option"][data-value="${action.value}"]`);
-                        if (option) {
-                            option.click();
-                            // Wait for React to update state, then click Save
-                            setTimeout(() => {
-                                const saveBtn = Array.from(document.querySelectorAll('button.MuiButton-contained')).find(b => b.textContent.trim() === 'Save');
-                                if (saveBtn) {
-                                    saveBtn.click();
-                                    debugLog('Quick action: set', action.value, 'and saved');
-                                }
-                                btn.textContent = action.label;
-                                btn.disabled = false;
-                            }, 100);
-                        } else {
-                            debugLog('Quick action: option not found:', action.value);
-                            // Close dropdown if option not found
-                            document.body.click();
-                            btn.textContent = action.label;
-                            btn.disabled = false;
-                        }
-                    }, 150);
-                });
-                wrap.appendChild(btn);
-            });
-
-            // Insert after the Skip button
-            skipBtn.after(wrap);
-        }
-
         const rocketObserver = new MutationObserver(() => {
             injectSmsLinks();
             injectEmailCopyButtons();
@@ -2535,7 +2534,6 @@ The election has now been called! We need people to hand out 'How to Vote' cards
             prefetchElectorate();
             injectTaskSummary();
             injectNoteChips();
-            injectQuickActions();
         });
         rocketObserver.observe(document.body, { childList: true, subtree: true });
 
@@ -2546,7 +2544,6 @@ The election has now been called! We need people to hand out 'How to Vote' cards
         prefetchElectorate();
         injectTaskSummary();
         injectNoteChips();
-        injectQuickActions();
     }
 
 })();
