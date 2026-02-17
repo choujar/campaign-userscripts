@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         List Manager Tweaks
 // @namespace    https://github.com/choujar/campaign-userscripts
-// @version      1.24.2
+// @version      1.24.3
 // @description  UX improvements for List Manager and Rocket
 // @author       Sahil Choujar
 // @match        https://listmanager.greens.org.au/*
@@ -1372,21 +1372,19 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                 width: 100%;
             }
             .gus-tasks-table {
-                border-collapse: separate;
-                border-spacing: 1px;
+                border-collapse: collapse;
                 font-size: 11px;
-                background: #333;
                 color: #ccc;
                 border-radius: 4px;
                 overflow: hidden;
             }
             .gus-tasks-table th,
             .gus-tasks-table td {
-                padding: 2px 3px;
+                padding: 3px 8px;
                 text-align: center;
                 white-space: nowrap;
+                border: 1px solid #4a4a4a;
                 background: #3a3a3a;
-                width: 24px;
             }
             .gus-tasks-table th {
                 background: #2e2e2e;
@@ -1399,8 +1397,8 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                 text-align: left;
                 font-weight: 500;
                 color: #ddd;
-                padding-left: 5px;
-                width: auto;
+                padding-left: 6px;
+                padding-right: 12px;
             }
             .gus-tasks-table td[data-s="Y"],
             .gus-tasks-table td[data-s="D"],
