@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         List Manager Tweaks
 // @namespace    https://github.com/choujar/campaign-userscripts
-// @version      1.24.1
+// @version      1.24.2
 // @description  UX improvements for List Manager and Rocket
 // @author       Sahil Choujar
 // @match        https://listmanager.greens.org.au/*
@@ -1404,14 +1404,14 @@ The election has now been called! We need people to hand out 'How to Vote' cards
             }
             .gus-tasks-table td[data-s="Y"],
             .gus-tasks-table td[data-s="D"],
-            .gus-tasks-table td[data-s="R"] { background: #2d4a2d; }
+            .gus-tasks-table td[data-s="R"] { background: #2e7d32; }
             .gus-tasks-table td[data-s="E"],
-            .gus-tasks-table td[data-s="L"] { background: #2a3d4f; }
-            .gus-tasks-table td[data-s="T"] { background: #4a3d2a; }
+            .gus-tasks-table td[data-s="L"] { background: #1565c0; }
+            .gus-tasks-table td[data-s="T"] { background: #e65100; }
             .gus-tasks-table td[data-s="I"],
-            .gus-tasks-table td[data-s="U"] { background: #444; }
+            .gus-tasks-table td[data-s="U"] { background: #555; }
             .gus-tasks-table td[data-s="N"],
-            .gus-tasks-table td[data-s="X"] { background: #4a2d2d; }
+            .gus-tasks-table td[data-s="X"] { background: #c62828; }
             .gus-meta-strip {
                 display: flex;
                 flex-wrap: wrap;
