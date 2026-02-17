@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         List Manager Tweaks
 // @namespace    https://github.com/choujar/campaign-userscripts
-// @version      1.24.5
+// @version      1.24.6
 // @description  UX improvements for List Manager and Rocket
 // @author       Sahil Choujar
 // @match        https://listmanager.greens.org.au/*
@@ -856,7 +856,7 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                 const sorted = [...resultData].sort((a, b) => b.count - a.count);
                 svgEl.querySelectorAll('.gus-ring-seg').forEach(el => el.remove());
 
-                const total = rosterTotal || 1;
+                const total = sorted.reduce((sum, r) => sum + r.count, 0) || 1;
                 const segments = sorted.map((r, i) => ({
                     color: r.color,
                     pct: (r.count / total) * 100,
