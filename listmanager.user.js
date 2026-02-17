@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         List Manager Tweaks
 // @namespace    https://github.com/choujar/campaign-userscripts
-// @version      1.25.4
+// @version      1.25.5
 // @description  UX improvements for List Manager and Rocket
 // @author       Sahil Choujar
 // @match        https://listmanager.greens.org.au/*
@@ -690,8 +690,8 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                     if (response.status === 401) { cb(null, 'auth_expired'); return; }
                     try {
                         const data = JSON.parse(response.responseText);
-                        cb(data.count ?? null, null);
-                    } catch (e) { cb(null, 'Parse error'); }
+                        cb(data.count ?? null, null, data.entities ?? null);
+                    } catch (e) { cb(null, 'Parse error', null); }
                 },
                 onerror: function() { cb(null, 'Request failed'); }
             });
@@ -952,36 +952,11 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                 }
             }
 
-            function fetchFullSearch(tree) {
-                return new Promise((resolve) => {
-                    const url = 'https://api.listmanager.greens.org.au/advsearch/preview?domainCode=sa&tree=' + encodeURIComponent(tree);
-                    GM_xmlhttpRequest({
-                        method: 'GET',
-                        url: url,
-                        headers: {
-                            'Authorization': 'Bearer ' + capturedJwt,
-                            'Accept': '*/*',
-                            'Origin': 'https://listmanager.greens.org.au'
-                        },
-                        onload: function(response) {
-                            try { resolve(JSON.parse(response.responseText)); }
-                            catch (e) { resolve({ error: 'parse_error', status: response.status }); }
-                        },
-                        onerror: function() { resolve({ error: 'request_failed' }); }
-                    });
-                });
-            }
-
-            async function downloadFullData() {
-                const btn = statusEl.querySelector('.gus-breakdown-download');
-                if (btn) btn.textContent = 'Downloading...';
-                const ordered = getPrioritisedElectorates();
+            function downloadFullData() {
+                if (!breakdownCache) return;
                 const allData = {};
-                for (let i = 0; i < ordered.length; i++) {
-                    const [name, id] = ordered[i];
-                    if (btn) btn.textContent = `Downloading ${i + 1}/${ordered.length}...`;
-                    allData[name] = await fetchFullSearch(buildElectorateTree(id));
-                    if (i < ordered.length - 1) await new Promise(r => setTimeout(r, 100));
+                for (const r of breakdownCache.results) {
+                    allData[r.name] = { count: r.count, entities: r.entities || [] };
                 }
                 const blob = new Blob([JSON.stringify(allData, null, 2)], { type: 'application/json' });
                 const a = document.createElement('a');
@@ -991,7 +966,6 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                 a.click();
                 a.remove();
                 URL.revokeObjectURL(a.href);
-                if (btn) btn.textContent = 'Download JSON';
             }
 
             function fetchAllElectorates() {
@@ -1004,10 +978,10 @@ The election has now been called! We need people to hand out 'How to Vote' cards
 
                 ordered.forEach(([name, id], i) => {
                     setTimeout(() => {
-                        fetchOneRoster(buildElectorateTree(id), function(count, err) {
+                        fetchOneRoster(buildElectorateTree(id), function(count, err, entities) {
                             loaded++;
                             if (count !== null) {
-                                results.push({ name, id, count });
+                                results.push({ name, id, count, entities: entities || [] });
                             }
                             renderBreakdownRing(results);
                             showStatus(`Loading ${loaded} / ${ordered.length}...`, false, loadingHint);
