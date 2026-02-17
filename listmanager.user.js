@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         List Manager Tweaks
 // @namespace    https://github.com/choujar/campaign-userscripts
-// @version      1.24.7
+// @version      1.25.0
 // @description  UX improvements for List Manager and Rocket
 // @author       Sahil Choujar
 // @match        https://listmanager.greens.org.au/*
@@ -792,9 +792,9 @@ The election has now been called! We need people to hand out 'How to Vote' cards
             });
         }
 
-        function electorateColor(index, total) {
-            const hue = (index * 360 / total) % 360;
-            return `hsl(${hue}, 55%, 50%)`;
+        function sortedColor(sortIndex) {
+            const hue = (sortIndex * 137.508) % 360;
+            return `hsl(${hue}, 65%, 45%)`;
         }
 
         function openBreakdownPopup() {
@@ -851,13 +851,32 @@ The election has now been called! We need people to hand out 'How to Vote' cards
             const progressArc = popup.querySelector('.gus-ring-progress');
             const progressPct = popup.querySelector('.gus-progress-pct');
 
+            function updateProgressRing() {
+                const circ2 = 2 * Math.PI * 40;
+                const pct = Math.min((rosterTotal || 0) / ROSTER_TARGET, 1);
+                const filled = pct * circ2;
+                progressArc.setAttribute('stroke-dasharray', `${filled} ${circ2 - filled}`);
+                progressPct.textContent = `${Math.round(pct * 100)}%`;
+            }
+
+            function updateLegendList(resultData) {
+                const sorted = [...resultData].sort((a, b) => b.count - a.count);
+                listEl.innerHTML = sorted.map((r, i) =>
+                    `<div class="gus-breakdown-row">
+                        <span class="gus-dot" style="background:${escapeHtml(sortedColor(i))};"></span>
+                        <span class="gus-breakdown-name">${escapeHtml(r.name)}</span>
+                        <span class="gus-breakdown-count">${escapeHtml('' + r.count)}</span>
+                    </div>`
+                ).join('');
+            }
+
             function renderBreakdownRing(resultData) {
                 const sorted = [...resultData].sort((a, b) => b.count - a.count);
                 svgEl.querySelectorAll('.gus-ring-seg').forEach(el => el.remove());
 
                 const total = sorted.reduce((sum, r) => sum + r.count, 0) || 1;
                 const segments = sorted.map((r, i) => ({
-                    color: r.color,
+                    color: sortedColor(i),
                     pct: (r.count / total) * 100,
                     label: `${r.name}: ${r.count}`
                 }));
@@ -886,21 +905,8 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                     rotation += (seg.pct / 100) * 360;
                 }
 
-                // Update legend list
-                listEl.innerHTML = sorted.map(r =>
-                    `<div class="gus-breakdown-row">
-                        <span class="gus-dot" style="background:${escapeHtml(r.color)};"></span>
-                        <span class="gus-breakdown-name">${escapeHtml(r.name)}</span>
-                        <span class="gus-breakdown-count">${escapeHtml('' + r.count)}</span>
-                    </div>`
-                ).join('');
-
-                // Update progress ring
-                const circ2 = 2 * Math.PI * 40;
-                const pct = Math.min((rosterTotal || 0) / ROSTER_TARGET, 1);
-                const filled = pct * circ2;
-                progressArc.setAttribute('stroke-dasharray', `${filled} ${circ2 - filled}`);
-                progressPct.textContent = `${Math.round(pct * 100)}%`;
+                updateLegendList(resultData);
+                updateProgressRing();
             }
 
             function cacheAgeText(ts) {
@@ -909,9 +915,10 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                 return mins === 1 ? '1 min ago' : `${mins} min ago`;
             }
 
-            function showStatus(text, showRefresh) {
+            function showStatus(text, showRefresh, hint) {
                 statusEl.innerHTML = escapeHtml(text) +
-                    (showRefresh ? ' <button class="gus-breakdown-refresh">Refresh</button>' : '');
+                    (showRefresh ? ' <button class="gus-breakdown-refresh">Refresh</button>' : '') +
+                    (hint ? `<div style="font-size:11px;color:#999;margin-top:4px;">${escapeHtml(hint)}</div>` : '');
                 if (showRefresh) {
                     statusEl.querySelector('.gus-breakdown-refresh').addEventListener('click', () => {
                         breakdownCache = null;
@@ -923,17 +930,19 @@ The election has now been called! We need people to hand out 'How to Vote' cards
             function fetchAllElectorates() {
                 const results = [];
                 let loaded = 0;
-                showStatus(`Loading 0 / ${ALL_ELECTORATES.length}...`, false);
+                const loadingHint = 'You can close this and come back — data loads in the background';
+                showStatus(`Loading 0 / ${ALL_ELECTORATES.length}...`, false, loadingHint);
+                updateProgressRing();
 
                 ALL_ELECTORATES.forEach(([name, id], i) => {
-                    const color = electorateColor(i, ALL_ELECTORATES.length);
                     setTimeout(() => {
                         fetchOneRoster(buildElectorateTree(id), function(count, err) {
                             loaded++;
                             if (count !== null) {
-                                results.push({ name, count, color });
+                                results.push({ name, count });
                             }
-                            statusEl.textContent = `Loading ${loaded} / ${ALL_ELECTORATES.length}...`;
+                            updateLegendList(results);
+                            showStatus(`Loading ${loaded} / ${ALL_ELECTORATES.length}...`, false, loadingHint);
                             if (loaded >= ALL_ELECTORATES.length) {
                                 renderBreakdownRing(results);
                                 breakdownCache = { results: [...results], timestamp: Date.now() };
@@ -943,6 +952,9 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                     }, i * 100);
                 });
             }
+
+            // Show progress ring immediately (rosterTotal already known)
+            updateProgressRing();
 
             // Use cache if fresh (< 30 min), otherwise fetch
             const CACHE_TTL = 30 * 60 * 1000;
