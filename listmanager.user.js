@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         List Manager Tweaks
 // @namespace    https://github.com/choujar/campaign-userscripts
-// @version      1.24.6
+// @version      1.24.7
 // @description  UX improvements for List Manager and Rocket
 // @author       Sahil Choujar
 // @match        https://listmanager.greens.org.au/*
@@ -634,7 +634,6 @@ The election has now been called! We need people to hand out 'How to Vote' cards
             return JSON.stringify({
                 op: 'intersection',
                 nodes: [
-                    { op: 'filter', filter: { name: 'geometryIds', value: [6], operator: 'lives in' } },
                     { op: 'filter', filter: { name: 'roster', value: { electionId: 182, electorateIds: [], rosterTypes: ['Rostered'], shiftStatus: 'Confirmed', votingPeriod: 'Polling Day' } } }
                 ],
                 printTime: false,
