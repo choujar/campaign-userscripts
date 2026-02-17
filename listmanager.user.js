@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         List Manager Tweaks
 // @namespace    https://github.com/choujar/campaign-userscripts
-// @version      1.25.0
+// @version      1.25.1
 // @description  UX improvements for List Manager and Rocket
 // @author       Sahil Choujar
 // @match        https://listmanager.greens.org.au/*
@@ -630,6 +630,20 @@ The election has now been called! We need people to hand out 'How to Vote' cards
             ['West Torrens', 140555], ['Wright', 140556]
         ];
 
+        function getPrioritisedElectorates() {
+            const saved = GM_getValue('electorateOrder', null);
+            if (!saved) return ALL_ELECTORATES;
+            const idOrder = new Map(saved.map((id, i) => [id, i]));
+            return [...ALL_ELECTORATES].sort((a, b) =>
+                (idOrder.get(a[1]) ?? 999) - (idOrder.get(b[1]) ?? 999)
+            );
+        }
+
+        function saveElectorateOrder(results) {
+            const sorted = [...results].sort((a, b) => b.count - a.count);
+            GM_setValue('electorateOrder', sorted.map(r => r.id));
+        }
+
         function buildTotalTree() {
             return JSON.stringify({
                 op: 'intersection',
@@ -875,6 +889,8 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                 svgEl.querySelectorAll('.gus-ring-seg').forEach(el => el.remove());
 
                 const total = sorted.reduce((sum, r) => sum + r.count, 0) || 1;
+                pctEl.textContent = total.toLocaleString();
+                pctEl.dataset.default = total.toLocaleString();
                 const segments = sorted.map((r, i) => ({
                     color: sortedColor(i),
                     pct: (r.count / total) * 100,
@@ -930,23 +946,29 @@ The election has now been called! We need people to hand out 'How to Vote' cards
             function fetchAllElectorates() {
                 const results = [];
                 let loaded = 0;
+                const ordered = getPrioritisedElectorates();
                 const loadingHint = 'You can close this and come back — data loads in the background';
-                showStatus(`Loading 0 / ${ALL_ELECTORATES.length}...`, false, loadingHint);
+                showStatus(`Loading 0 / ${ordered.length}...`, false, loadingHint);
                 updateProgressRing();
+                pctEl.textContent = '0';
+                pctEl.dataset.default = '0';
 
-                ALL_ELECTORATES.forEach(([name, id], i) => {
+                ordered.forEach(([name, id], i) => {
                     setTimeout(() => {
                         fetchOneRoster(buildElectorateTree(id), function(count, err) {
                             loaded++;
                             if (count !== null) {
-                                results.push({ name, count });
+                                results.push({ name, id, count });
                             }
-                            updateLegendList(results);
-                            showStatus(`Loading ${loaded} / ${ALL_ELECTORATES.length}...`, false, loadingHint);
-                            if (loaded >= ALL_ELECTORATES.length) {
-                                renderBreakdownRing(results);
+                            const runningTotal = results.reduce((s, r) => s + r.count, 0);
+                            pctEl.textContent = runningTotal.toLocaleString();
+                            pctEl.dataset.default = runningTotal.toLocaleString();
+                            renderBreakdownRing(results);
+                            showStatus(`Loading ${loaded} / ${ordered.length}...`, false, loadingHint);
+                            if (loaded >= ordered.length) {
+                                saveElectorateOrder(results);
                                 breakdownCache = { results: [...results], timestamp: Date.now() };
-                                showStatus(`${ALL_ELECTORATES.length} electorates loaded — ${cacheAgeText(breakdownCache.timestamp)}`, true);
+                                showStatus(`${ordered.length} electorates loaded — ${cacheAgeText(breakdownCache.timestamp)}`, true);
                             }
                         });
                     }, i * 100);
