@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         List Manager Tweaks
 // @namespace    https://github.com/choujar/campaign-userscripts
-// @version      1.23.1
+// @version      1.24.0
 // @description  UX improvements for List Manager and Rocket
 // @author       Sahil Choujar
 // @match        https://listmanager.greens.org.au/*
@@ -1205,6 +1205,12 @@ The election has now been called! We need people to hand out 'How to Vote' cards
     if (IS_ROCKET) {
 
         GM_addStyle(`
+            .panel-body > p {
+                margin-bottom: 3px !important;
+            }
+            .panel-body > p > label {
+                margin-bottom: 0;
+            }
             .gus-sms-link, .gus-copy-phone, .gus-copy-email {
                 display: inline-flex;
                 align-items: center;
@@ -1367,24 +1373,25 @@ The election has now been called! We need people to hand out 'How to Vote' cards
             }
             .gus-tasks-table {
                 width: 100%;
-                border-collapse: collapse;
-                font-size: 12px;
-                background: #3a3a3a;
+                border-collapse: separate;
+                border-spacing: 1px;
+                font-size: 11px;
+                background: #333;
                 color: #ccc;
                 border-radius: 4px;
                 overflow: hidden;
             }
             .gus-tasks-table th,
             .gus-tasks-table td {
-                padding: 4px 6px;
+                padding: 2px 3px;
                 text-align: center;
-                border: 1px solid #4a4a4a;
                 white-space: nowrap;
+                background: #3a3a3a;
             }
             .gus-tasks-table th {
                 background: #2e2e2e;
                 font-weight: 600;
-                font-size: 11px;
+                font-size: 10px;
                 color: #aaa;
             }
             .gus-tasks-table th:first-child,
@@ -1392,17 +1399,32 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                 text-align: left;
                 font-weight: 500;
                 color: #ddd;
+                padding-left: 5px;
             }
-            .gus-task-E { color: #5bc0de; }
-            .gus-task-Y { color: #5cb85c; }
-            .gus-task-D { color: #5cb85c; }
-            .gus-task-R { color: #5cb85c; }
-            .gus-task-L { color: #5bc0de; }
-            .gus-task-T { color: #f0ad4e; }
-            .gus-task-I { color: #999; }
-            .gus-task-U { color: #999; }
-            .gus-task-N { color: #d9534f; }
-            .gus-task-X { color: #d9534f; }
+            .gus-tasks-table td[data-s="Y"],
+            .gus-tasks-table td[data-s="D"],
+            .gus-tasks-table td[data-s="R"] { background: #2d4a2d; }
+            .gus-tasks-table td[data-s="E"],
+            .gus-tasks-table td[data-s="L"] { background: #2a3d4f; }
+            .gus-tasks-table td[data-s="T"] { background: #4a3d2a; }
+            .gus-tasks-table td[data-s="I"],
+            .gus-tasks-table td[data-s="U"] { background: #444; }
+            .gus-tasks-table td[data-s="N"],
+            .gus-tasks-table td[data-s="X"] { background: #4a2d2d; }
+            .gus-meta-strip {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 2px 10px;
+                font-size: 12px;
+                color: #ccc;
+                padding: 0 15px;
+                margin-top: 2px;
+            }
+            .gus-meta-strip span { white-space: nowrap; }
+            .gus-meta-strip .gus-meta-label {
+                color: #888;
+                font-size: 11px;
+            }
             .gus-note-chips {
                 display: flex;
                 gap: 4px;
@@ -2230,17 +2252,6 @@ The election has now been called! We need people to hand out 'How to Vote' cards
             return { headers, elections };
         }
 
-        const CHOICE_ICONS = {
-            E: '✓',
-            T: '?',
-            Y: '✓',
-            L: '~',
-            R: 'R',
-            D: '✓',
-            N: '✗',
-            X: '✗',
-        };
-
         const CHOICE_TITLES = {
             E: 'Expressed interest',
             T: 'Tentative',
@@ -2277,9 +2288,8 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                     const choice = election.statuses[i];
                     if (choice) {
                         const safeChoice = /^[A-Z]$/.test(choice) ? choice : 'X';
-                        const icon = CHOICE_ICONS[safeChoice] || '?';
                         const title = CHOICE_TITLES[safeChoice] || 'Unknown';
-                        html += `<td title="${escapeHtml(title)}"><span class="gus-task-${safeChoice}">${escapeHtml(icon)}</span></td>`;
+                        html += `<td data-s="${safeChoice}" title="${escapeHtml(title)}"></td>`;
                     } else {
                         html += '<td></td>';
                     }
@@ -2290,6 +2300,70 @@ The election has now been called! We need people to hand out 'How to Vote' cards
             html += '</tbody></table>';
             wrap.innerHTML = html;
             panelBody.appendChild(wrap);
+        }
+
+        function injectMetaStrip() {
+            const panelBody = document.querySelector('.panel-body');
+            if (!panelBody || panelBody.querySelector('.gus-meta-strip')) return;
+
+            const META_FIELDS = [
+                { label: 'Age', ng: 'shared.contact.rec.age_years' },
+                { label: 'Pronouns', ng: 'shared.contact.rec.pronouns' },
+                { label: 'Status', ng: 'true || fields.show_pending_status' },
+                { label: 'Updated', ng: 'fields.show_when_updated' },
+                { label: 'Created', ng: 'fields.show_when_created' },
+                { label: 'Membership', ng: 'fields.show_membership' },
+            ];
+
+            const parts = [];
+            const toHide = [];
+
+            for (const p of panelBody.querySelectorAll(':scope > p')) {
+                const lbl = p.querySelector('label');
+                if (!lbl) continue;
+                const labelText = lbl.textContent.trim().replace(/:$/, '');
+
+                if (labelText === 'Age' || labelText === 'Pronouns') {
+                    const val = p.textContent.replace(lbl.textContent, '').trim();
+                    if (val) parts.push(`<span><span class="gus-meta-label">${escapeHtml(labelText)}</span> ${escapeHtml(val)}</span>`);
+                    toHide.push(p);
+                } else if (labelText === 'Current status') {
+                    const val = p.textContent.replace(lbl.textContent, '').trim();
+                    if (val) parts.push(`<span><span class="gus-meta-label">Status</span> ${escapeHtml(val)}</span>`);
+                    toHide.push(p);
+                } else if (labelText === 'Updated' || labelText === 'Created') {
+                    const timeEl = p.querySelector('[am-time-ago]');
+                    const val = timeEl ? timeEl.textContent.trim() : '';
+                    if (val) parts.push(`<span><span class="gus-meta-label">${escapeHtml(labelText)}</span> ${escapeHtml(val)}</span>`);
+                    toHide.push(p);
+                } else if (labelText === 'Membership expiry') {
+                    const timeEl = p.querySelector('[am-time-ago]');
+                    const val = timeEl ? timeEl.textContent.trim() : '';
+                    if (val) parts.push(`<span><span class="gus-meta-label">Member</span> ${escapeHtml(val)}</span>`);
+                    toHide.push(p);
+                } else if (labelText === 'Contact ID') {
+                    const link = p.querySelector('a');
+                    const val = link ? link.textContent.trim() : '';
+                    const href = link ? link.getAttribute('href') : '';
+                    if (val) parts.push(`<span><span class="gus-meta-label">ID</span> <a href="${escapeHtml(href)}" style="color:#7ab8d9">${escapeHtml(val)}</a></span>`);
+                    toHide.push(p);
+                }
+            }
+
+            if (parts.length === 0) return;
+
+            toHide.forEach(el => el.style.display = 'none');
+
+            const strip = document.createElement('div');
+            strip.className = 'gus-meta-strip';
+            strip.innerHTML = parts.join('<span style="color:#555">·</span>');
+
+            const tasksWrap = panelBody.querySelector('.gus-tasks-table-wrap');
+            if (tasksWrap) {
+                panelBody.insertBefore(strip, tasksWrap);
+            } else {
+                panelBody.appendChild(strip);
+            }
         }
 
         const DEFAULT_NOTE_CHIPS = [
@@ -2533,6 +2607,7 @@ The election has now been called! We need people to hand out 'How to Vote' cards
             convertShiftTimes();
             prefetchElectorate();
             injectTaskSummary();
+            injectMetaStrip();
             injectNoteChips();
         });
         rocketObserver.observe(document.body, { childList: true, subtree: true });
@@ -2543,6 +2618,7 @@ The election has now been called! We need people to hand out 'How to Vote' cards
         convertShiftTimes();
         prefetchElectorate();
         injectTaskSummary();
+        injectMetaStrip();
         injectNoteChips();
     }
 
