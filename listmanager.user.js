@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         List Manager Tweaks
 // @namespace    https://github.com/choujar/campaign-userscripts
-// @version      1.24.4
+// @version      1.24.5
 // @description  UX improvements for List Manager and Rocket
 // @author       Sahil Choujar
 // @match        https://listmanager.greens.org.au/*
@@ -601,7 +601,7 @@ The election has now been called! We need people to hand out 'How to Vote' cards
         }
 
         // --- Roster count tracker ---
-        const ROSTER_TARGET = 1601;
+        const ROSTER_TARGET = 1602;
         const HEYSEN_ID = 140532;
         const HEYSEN_COLOR = '#2e7d32';
         const OTHER_COLOR = '#888';
@@ -935,8 +935,8 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                                 results.push({ name, count, color });
                             }
                             statusEl.textContent = `Loading ${loaded} / ${ALL_ELECTORATES.length}...`;
-                            renderBreakdownRing(results);
                             if (loaded >= ALL_ELECTORATES.length) {
+                                renderBreakdownRing(results);
                                 breakdownCache = { results: [...results], timestamp: Date.now() };
                                 showStatus(`${ALL_ELECTORATES.length} electorates loaded — ${cacheAgeText(breakdownCache.timestamp)}`, true);
                             }
