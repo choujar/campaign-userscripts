@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         List Manager Tweaks
 // @namespace    https://github.com/choujar/campaign-userscripts
-// @version      1.25.5
+// @version      1.25.6
 // @description  UX improvements for List Manager and Rocket
 // @author       Sahil Choujar
 // @match        https://listmanager.greens.org.au/*
@@ -861,6 +861,10 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                     </div>
                     <div class="gus-breakdown-status">Loading 0 / ${ALL_ELECTORATES.length}...</div>
                     <div class="gus-breakdown-list"></div>
+                    <div style="font-size:11px;color:#999;margin-top:12px;line-height:1.4;">
+                        Note: Some polling booths span multiple electorates, so volunteers at border booths
+                        appear in both counts. The total (${rosterTotal?.toLocaleString() ?? '...'}) reflects unique volunteers.
+                    </div>
                 </div>
             `;
 
