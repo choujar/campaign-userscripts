@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         List Manager Tweaks
 // @namespace    https://github.com/choujar/campaign-userscripts
-// @version      1.25.1
+// @version      1.25.2
 // @description  UX improvements for List Manager and Rocket
 // @author       Sahil Choujar
 // @match        https://listmanager.greens.org.au/*
@@ -889,8 +889,6 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                 svgEl.querySelectorAll('.gus-ring-seg').forEach(el => el.remove());
 
                 const total = sorted.reduce((sum, r) => sum + r.count, 0) || 1;
-                pctEl.textContent = total.toLocaleString();
-                pctEl.dataset.default = total.toLocaleString();
                 const segments = sorted.map((r, i) => ({
                     color: sortedColor(i),
                     pct: (r.count / total) * 100,
@@ -950,8 +948,6 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                 const loadingHint = 'You can close this and come back — data loads in the background';
                 showStatus(`Loading 0 / ${ordered.length}...`, false, loadingHint);
                 updateProgressRing();
-                pctEl.textContent = '0';
-                pctEl.dataset.default = '0';
 
                 ordered.forEach(([name, id], i) => {
                     setTimeout(() => {
@@ -960,9 +956,6 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                             if (count !== null) {
                                 results.push({ name, id, count });
                             }
-                            const runningTotal = results.reduce((s, r) => s + r.count, 0);
-                            pctEl.textContent = runningTotal.toLocaleString();
-                            pctEl.dataset.default = runningTotal.toLocaleString();
                             renderBreakdownRing(results);
                             showStatus(`Loading ${loaded} / ${ordered.length}...`, false, loadingHint);
                             if (loaded >= ordered.length) {
