@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         List Manager Tweaks
 // @namespace    https://github.com/choujar/campaign-userscripts
-// @version      1.25.2
+// @version      1.25.3
 // @description  UX improvements for List Manager and Rocket
 // @author       Sahil Choujar
 // @match        https://listmanager.greens.org.au/*
@@ -425,9 +425,19 @@
                 padding: 2px 8px;
                 margin-left: 6px;
             }
-            .gus-breakdown-refresh:hover {
+            .gus-breakdown-refresh:hover, .gus-breakdown-download:hover {
                 background: #f0f0f0;
                 color: #333;
+            }
+            .gus-breakdown-download {
+                background: none;
+                border: 1px solid #ccc;
+                border-radius: 4px;
+                color: #666;
+                cursor: pointer;
+                font-size: 11px;
+                padding: 2px 8px;
+                margin-left: 6px;
             }
         `);
 
@@ -931,14 +941,57 @@ The election has now been called! We need people to hand out 'How to Vote' cards
 
             function showStatus(text, showRefresh, hint) {
                 statusEl.innerHTML = escapeHtml(text) +
-                    (showRefresh ? ' <button class="gus-breakdown-refresh">Refresh</button>' : '') +
+                    (showRefresh ? ' <button class="gus-breakdown-refresh">Refresh</button> <button class="gus-breakdown-download">Download JSON</button>' : '') +
                     (hint ? `<div style="font-size:11px;color:#999;margin-top:4px;">${escapeHtml(hint)}</div>` : '');
                 if (showRefresh) {
                     statusEl.querySelector('.gus-breakdown-refresh').addEventListener('click', () => {
                         breakdownCache = null;
                         fetchAllElectorates();
                     });
+                    statusEl.querySelector('.gus-breakdown-download').addEventListener('click', downloadFullData);
                 }
+            }
+
+            function fetchFullSearch(tree) {
+                return new Promise((resolve) => {
+                    const url = 'https://api.listmanager.greens.org.au/advsearch?domainCode=sa&tree=' + encodeURIComponent(tree);
+                    GM_xmlhttpRequest({
+                        method: 'GET',
+                        url: url,
+                        headers: {
+                            'Authorization': 'Bearer ' + capturedJwt,
+                            'Accept': '*/*',
+                            'Origin': 'https://listmanager.greens.org.au'
+                        },
+                        onload: function(response) {
+                            try { resolve(JSON.parse(response.responseText)); }
+                            catch (e) { resolve({ error: 'parse_error', status: response.status }); }
+                        },
+                        onerror: function() { resolve({ error: 'request_failed' }); }
+                    });
+                });
+            }
+
+            async function downloadFullData() {
+                const btn = statusEl.querySelector('.gus-breakdown-download');
+                if (btn) btn.textContent = 'Downloading...';
+                const ordered = getPrioritisedElectorates();
+                const allData = {};
+                for (let i = 0; i < ordered.length; i++) {
+                    const [name, id] = ordered[i];
+                    if (btn) btn.textContent = `Downloading ${i + 1}/${ordered.length}...`;
+                    allData[name] = await fetchFullSearch(buildElectorateTree(id));
+                    if (i < ordered.length - 1) await new Promise(r => setTimeout(r, 100));
+                }
+                const blob = new Blob([JSON.stringify(allData, null, 2)], { type: 'application/json' });
+                const a = document.createElement('a');
+                a.href = URL.createObjectURL(blob);
+                a.download = 'electorate-roster-data.json';
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                URL.revokeObjectURL(a.href);
+                if (btn) btn.textContent = 'Download JSON';
             }
 
             function fetchAllElectorates() {
