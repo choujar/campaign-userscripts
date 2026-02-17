@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         List Manager Tweaks
 // @namespace    https://github.com/choujar/campaign-userscripts
-// @version      1.25.3
+// @version      1.25.4
 // @description  UX improvements for List Manager and Rocket
 // @author       Sahil Choujar
 // @match        https://listmanager.greens.org.au/*
@@ -954,7 +954,7 @@ The election has now been called! We need people to hand out 'How to Vote' cards
 
             function fetchFullSearch(tree) {
                 return new Promise((resolve) => {
-                    const url = 'https://api.listmanager.greens.org.au/advsearch?domainCode=sa&tree=' + encodeURIComponent(tree);
+                    const url = 'https://api.listmanager.greens.org.au/advsearch/preview?domainCode=sa&tree=' + encodeURIComponent(tree);
                     GM_xmlhttpRequest({
                         method: 'GET',
                         url: url,
