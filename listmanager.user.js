@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         List Manager Tweaks
 // @namespace    https://github.com/choujar/campaign-userscripts
-// @version      1.24.3
+// @version      1.24.4
 // @description  UX improvements for List Manager and Rocket
 // @author       Sahil Choujar
 // @match        https://listmanager.greens.org.au/*
@@ -1367,7 +1367,7 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                 border-color: #2e7d32;
             }
             .gus-tasks-table-wrap {
-                margin-top: 4px;
+                margin-top: 10px;
                 padding: 0 15px;
                 width: 100%;
             }
@@ -2338,7 +2338,7 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                 } else if (labelText === 'Membership expiry') {
                     const timeEl = p.querySelector('[am-time-ago]');
                     const val = timeEl ? timeEl.textContent.trim() : '';
-                    if (val) parts.push(`<span><span class="gus-meta-label">Member</span> ${escapeHtml(val)}</span>`);
+                    if (val) parts.push(`<span><span class="gus-meta-label">Membership due</span> ${escapeHtml(val)}</span>`);
                     toHide.push(p);
                 } else if (labelText === 'Contact ID') {
                     const link = p.querySelector('a');
