@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         List Manager Tweaks
 // @namespace    https://github.com/choujar/campaign-userscripts
-// @version      1.25.6
+// @version      1.25.7
 // @description  UX improvements for List Manager and Rocket
 // @author       Sahil Choujar
 // @match        https://listmanager.greens.org.au/*
@@ -1935,7 +1935,12 @@ The election has now been called! We need people to hand out 'How to Vote' cards
         }
 
         function getRocketTemplate() {
-            // Try shared template from List Manager, fall back to default
+            // Try current list's template first, then shared, then default
+            const listId = getListId();
+            if (listId) {
+                const listTemplate = GM_getValue('smsTemplate_' + listId, null);
+                if (listTemplate) return listTemplate;
+            }
             const shared = GM_getValue('smsTemplate_current', null);
             return shared || DEFAULT_TEMPLATE_ROCKET;
         }
