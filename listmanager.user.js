@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         List Manager Tweaks
 // @namespace    https://github.com/choujar/campaign-userscripts
-// @version      1.26.4
+// @version      1.27.0
 // @description  UX improvements for List Manager and Rocket
 // @author       Sahil Choujar
 // @match        https://listmanager.greens.org.au/*
@@ -610,9 +610,11 @@ The election has now been called! We need people to hand out 'How to Vote' cards
         const HEYSEN_COLOR = '#2e7d32';
         const OTHER_COLOR = '#888';
         const SELF_ROSTERED_COLOR = '#1565c0';
+        const EARLY_VOTING_COLOR = '#7b1fa2';
         let rosterTotal = null;
         let rosterHeysen = null;
         let rosterSelfRostered = null;
+        let rosterEarlyVoting = null;
         let rosterLoading = false;
         let breakdownCache = null; // { results: [...], timestamp: Date.now() }
         let rosterError = null;
@@ -672,6 +674,17 @@ The election has now been called! We need people to hand out 'How to Vote' cards
             });
         }
 
+        function buildEarlyVotingTree() {
+            return JSON.stringify({
+                op: 'intersection',
+                nodes: [
+                    { op: 'filter', filter: { name: 'roster', value: { electionId: 182, electorateIds: [], rosterTypes: ['Rostered'], shiftStatus: 'Confirmed', votingPeriod: 'Early voting' } } }
+                ],
+                printTime: false,
+                useAdvancedSearchII: false
+            });
+        }
+
         function buildElectorateTree(electorateId) {
             return JSON.stringify({
                 op: 'intersection',
@@ -725,7 +738,7 @@ The election has now been called! We need people to hand out 'How to Vote' cards
 
             function checkDone() {
                 done++;
-                if (done < 3) return;
+                if (done < 4) { updateRosterWidget(); return; }
                 rosterLoading = false;
                 if (authExpired) {
                     capturedJwt = null;
@@ -756,6 +769,13 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                 if (err === 'auth_expired') { authExpired = true; }
                 else if (err) { if (!rosterError) rosterError = err; }
                 else { rosterSelfRostered = count; }
+                checkDone();
+            });
+
+            fetchOneRoster(buildEarlyVotingTree(), function(count, err) {
+                if (err === 'auth_expired') { authExpired = true; }
+                else if (err) { if (!rosterError) rosterError = err; }
+                else { rosterEarlyVoting = count; }
                 checkDone();
             });
         }
@@ -868,14 +888,14 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                                 </svg>
                                 <span class="gus-roster-pct gus-total-pct">0%</span>
                             </div>
-                            <div class="gus-breakdown-ring-label"><strong>${((rosterTotal ?? 0) + (rosterSelfRostered ?? 0)).toLocaleString()}</strong> <span style="color:${HEYSEN_COLOR};">(${(rosterHeysen ?? 0).toLocaleString()})</span> <span style="color:${SELF_ROSTERED_COLOR};">(${(rosterSelfRostered ?? 0).toLocaleString()})</span> / ${ROSTER_TARGET.toLocaleString()}</div>
+                            <div class="gus-breakdown-ring-label"><strong>${((rosterTotal ?? 0) + (rosterSelfRostered ?? 0) + (rosterEarlyVoting ?? 0)).toLocaleString()}</strong> <span style="color:${HEYSEN_COLOR};">(${(rosterHeysen ?? 0).toLocaleString()})</span> <span style="color:${SELF_ROSTERED_COLOR};">(${(rosterSelfRostered ?? 0).toLocaleString()})</span> <span style="color:${EARLY_VOTING_COLOR};">(${(rosterEarlyVoting ?? 0).toLocaleString()})</span> / ${ROSTER_TARGET.toLocaleString()}</div>
                         </div>
                     </div>
                     <div class="gus-breakdown-status">Loading 0 / ${ALL_ELECTORATES.length}...</div>
                     <div class="gus-breakdown-list"></div>
                     <div style="font-size:11px;color:#999;margin-top:12px;line-height:1.4;">
                         Note: Some polling booths span multiple electorates, so volunteers at border booths
-                        appear in both counts. The total (${((rosterTotal ?? 0) + (rosterSelfRostered ?? 0)).toLocaleString()}) reflects confirmed + self-rostered volunteers.
+                        appear in both counts. The total (${((rosterTotal ?? 0) + (rosterSelfRostered ?? 0) + (rosterEarlyVoting ?? 0)).toLocaleString()}) reflects confirmed + self-rostered + early voting volunteers.
                     </div>
                 </div>
             `;
@@ -895,7 +915,8 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                 const heysen = rosterHeysen ?? 0;
                 const other = (rosterTotal ?? 0) - heysen;
                 const selfR = rosterSelfRostered ?? 0;
-                const grandTotal = (rosterTotal ?? 0) + selfR;
+                const early = rosterEarlyVoting ?? 0;
+                const grandTotal = (rosterTotal ?? 0) + selfR + early;
                 const pct = Math.min(grandTotal / ROSTER_TARGET, 1);
 
                 totalPctEl.textContent = `${Math.round(pct * 100)}%`;
@@ -908,7 +929,8 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                 const segs = [
                     { color: HEYSEN_COLOR, count: heysen, label: `Heysen: ${heysen}` },
                     { color: OTHER_COLOR, count: other, label: `Other: ${other}` },
-                    { color: SELF_ROSTERED_COLOR, count: selfR, label: `Self-rostered: ${selfR}` }
+                    { color: SELF_ROSTERED_COLOR, count: selfR, label: `Self-rostered: ${selfR}` },
+                    { color: EARLY_VOTING_COLOR, count: early, label: `Early voting: ${early}` }
                 ];
                 let rotation = 0;
                 for (const seg of segs) {
@@ -1065,7 +1087,13 @@ The election has now been called! We need people to hand out 'How to Vote' cards
             if (!body) return;
 
             if (rosterLoading) {
-                body.innerHTML = '<span class="gus-roster-loading"><span class="gus-spinner"></span> Loading...</span>';
+                const parts = [];
+                if (rosterTotal !== null) parts.push('Confirmed');
+                if (rosterHeysen !== null) parts.push('Heysen');
+                if (rosterSelfRostered !== null) parts.push('Self-rostered');
+                if (rosterEarlyVoting !== null) parts.push('Early voting');
+                const status = parts.length ? parts.join(', ') + ' ✓' : 'Fetching data...';
+                body.innerHTML = `<span class="gus-roster-loading"><span class="gus-spinner"></span> ${escapeHtml(status)}</span>`;
                 return;
             }
             if (rosterError) {
@@ -1076,25 +1104,29 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                 const heysen = rosterHeysen ?? 0;
                 const other = rosterTotal - heysen;
                 const selfRostered = rosterSelfRostered ?? 0;
-                const grandTotal = rosterTotal + selfRostered;
+                const earlyVoting = rosterEarlyVoting ?? 0;
+                const grandTotal = rosterTotal + selfRostered + earlyVoting;
                 const heysenPct = Math.min((heysen / ROSTER_TARGET) * 100, 100);
                 const otherPct = Math.min((other / ROSTER_TARGET) * 100, 100 - heysenPct);
                 const selfPct = Math.min((selfRostered / ROSTER_TARGET) * 100, Math.max(100 - heysenPct - otherPct, 0));
+                const earlyPct = Math.min((earlyVoting / ROSTER_TARGET) * 100, Math.max(100 - heysenPct - otherPct - selfPct, 0));
                 const totalPct = Math.round(Math.min((grandTotal / ROSTER_TARGET) * 100, 100));
 
                 const segments = [
                     { color: HEYSEN_COLOR, pct: heysenPct, label: `${heysen}` },
                     { color: OTHER_COLOR, pct: otherPct, label: `${other}` },
-                    { color: SELF_ROSTERED_COLOR, pct: selfPct, label: `${selfRostered}` }
+                    { color: SELF_ROSTERED_COLOR, pct: selfPct, label: `${selfRostered}` },
+                    { color: EARLY_VOTING_COLOR, pct: earlyPct, label: `${earlyVoting}` }
                 ];
 
                 body.innerHTML = `
                     ${buildRingHtml(segments, totalPct + '%')}
-                    <span class="gus-roster-count"><strong>${grandTotal.toLocaleString()}</strong> <span style="color:${HEYSEN_COLOR};">(${heysen.toLocaleString()})</span> <span style="color:${SELF_ROSTERED_COLOR};">(${selfRostered.toLocaleString()})</span> / ${ROSTER_TARGET.toLocaleString()}</span>
+                    <span class="gus-roster-count"><strong>${grandTotal.toLocaleString()}</strong> <span style="color:${HEYSEN_COLOR};">(${heysen.toLocaleString()})</span> <span style="color:${SELF_ROSTERED_COLOR};">(${selfRostered.toLocaleString()})</span> <span style="color:${EARLY_VOTING_COLOR};">(${earlyVoting.toLocaleString()})</span> / ${ROSTER_TARGET.toLocaleString()}</span>
                     <div class="gus-roster-legend">
                         <span><span class="gus-dot" style="background:${HEYSEN_COLOR};"></span>Heysen</span>
                         <span><span class="gus-dot" style="background:${OTHER_COLOR};"></span>Other</span>
                         <span><span class="gus-dot" style="background:${SELF_ROSTERED_COLOR};"></span>Self-rostered</span>
+                        <span><span class="gus-dot" style="background:${EARLY_VOTING_COLOR};"></span>Early voting</span>
                     </div>
                 `;
                 attachRingHover(widget);
