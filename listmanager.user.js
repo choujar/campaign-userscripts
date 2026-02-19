@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         List Manager Tweaks
 // @namespace    https://github.com/choujar/campaign-userscripts
-// @version      1.26.1
+// @version      1.26.2
 // @description  UX improvements for List Manager and Rocket
 // @author       Sahil Choujar
 // @match        https://listmanager.greens.org.au/*
@@ -1090,7 +1090,7 @@ The election has now been called! We need people to hand out 'How to Vote' cards
 
                 body.innerHTML = `
                     ${buildRingHtml(segments, totalPct + '%')}
-                    <span class="gus-roster-count"><strong>${grandTotal.toLocaleString()}</strong> / ${ROSTER_TARGET.toLocaleString()}</span>
+                    <span class="gus-roster-count"><strong>${grandTotal.toLocaleString()}</strong> <span style="color:${HEYSEN_COLOR};">(${heysen.toLocaleString()})</span> <span style="color:${SELF_ROSTERED_COLOR};">(${selfRostered.toLocaleString()})</span> / ${ROSTER_TARGET.toLocaleString()}</span>
                     <div class="gus-roster-legend">
                         <span><span class="gus-dot" style="background:${HEYSEN_COLOR};"></span>Heysen</span>
                         <span><span class="gus-dot" style="background:${OTHER_COLOR};"></span>Other</span>
