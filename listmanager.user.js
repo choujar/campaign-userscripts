@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         List Manager Tweaks
 // @namespace    https://github.com/choujar/campaign-userscripts
-// @version      1.26.0
+// @version      1.26.1
 // @description  UX improvements for List Manager and Rocket
 // @author       Sahil Choujar
 // @match        https://listmanager.greens.org.au/*
@@ -243,6 +243,7 @@
                 position: relative;
                 width: 100px;
                 height: 100px;
+                margin: 0 auto;
             }
             .gus-roster-ring svg {
                 width: 100%;
