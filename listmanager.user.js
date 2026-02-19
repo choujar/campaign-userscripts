@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         List Manager Tweaks
 // @namespace    https://github.com/choujar/campaign-userscripts
-// @version      1.25.8
+// @version      1.26.0
 // @description  UX improvements for List Manager and Rocket
 // @author       Sahil Choujar
 // @match        https://listmanager.greens.org.au/*
@@ -369,19 +369,12 @@
             .gus-breakdown-ring .gus-roster-pct {
                 font-size: 14px;
             }
-            .gus-progress-ring {
+            .gus-total-ring {
                 width: 160px;
                 height: 160px;
             }
-            .gus-progress-ring .gus-roster-pct {
+            .gus-total-ring .gus-roster-pct {
                 font-size: 13px;
-            }
-            .gus-progress-ring .gus-ring-progress {
-                fill: none;
-                stroke: #4caf50;
-                stroke-width: 8;
-                stroke-linecap: round;
-                transition: stroke-dasharray 0.3s ease;
             }
             .gus-breakdown-list {
                 width: 100%;
@@ -615,8 +608,10 @@ The election has now been called! We need people to hand out 'How to Vote' cards
         const HEYSEN_ID = 140532;
         const HEYSEN_COLOR = '#2e7d32';
         const OTHER_COLOR = '#888';
+        const SELF_ROSTERED_COLOR = '#1565c0';
         let rosterTotal = null;
         let rosterHeysen = null;
+        let rosterSelfRostered = null;
         let rosterLoading = false;
         let breakdownCache = null; // { results: [...], timestamp: Date.now() }
         let rosterError = null;
@@ -659,6 +654,17 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                 op: 'intersection',
                 nodes: [
                     { op: 'filter', filter: { name: 'roster', value: { electionId: 182, electorateIds: [], rosterTypes: ['Rostered'], shiftStatus: 'Confirmed', votingPeriod: 'Polling Day' } } }
+                ],
+                printTime: false,
+                useAdvancedSearchII: false
+            });
+        }
+
+        function buildSelfRosteredTree() {
+            return JSON.stringify({
+                op: 'intersection',
+                nodes: [
+                    { op: 'filter', filter: { name: 'roster', value: { electionId: 182, electorateIds: [], rosterTypes: ['Self-rostered'], shiftStatus: 'Any', votingPeriod: 'Polling Day' } } }
                 ],
                 printTime: false,
                 useAdvancedSearchII: false
@@ -718,7 +724,7 @@ The election has now been called! We need people to hand out 'How to Vote' cards
 
             function checkDone() {
                 done++;
-                if (done < 2) return;
+                if (done < 3) return;
                 rosterLoading = false;
                 if (authExpired) {
                     capturedJwt = null;
@@ -742,6 +748,13 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                 if (err === 'auth_expired') { authExpired = true; }
                 else if (err) { if (!rosterError) rosterError = err; }
                 else { rosterHeysen = count; }
+                checkDone();
+            });
+
+            fetchOneRoster(buildSelfRosteredTree(), function(count, err) {
+                if (err === 'auth_expired') { authExpired = true; }
+                else if (err) { if (!rosterError) rosterError = err; }
+                else { rosterSelfRostered = count; }
                 checkDone();
             });
         }
@@ -848,13 +861,11 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                             <div class="gus-breakdown-ring-label">By electorate</div>
                         </div>
                         <div class="gus-breakdown-ring-wrap">
-                            <div class="gus-roster-ring gus-progress-ring">
+                            <div class="gus-roster-ring gus-total-ring">
                                 <svg viewBox="0 0 100 100">
                                     <circle class="gus-ring-bg" cx="50" cy="50" r="40"/>
-                                    <circle class="gus-ring-progress" cx="50" cy="50" r="40"
-                                        stroke-dasharray="0 251.33"/>
                                 </svg>
-                                <span class="gus-roster-pct gus-progress-pct">0%</span>
+                                <span class="gus-roster-pct gus-total-pct">0%</span>
                             </div>
                             <div class="gus-breakdown-ring-label">Target: ${ROSTER_TARGET.toLocaleString()}</div>
                         </div>
@@ -863,7 +874,7 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                     <div class="gus-breakdown-list"></div>
                     <div style="font-size:11px;color:#999;margin-top:12px;line-height:1.4;">
                         Note: Some polling booths span multiple electorates, so volunteers at border booths
-                        appear in both counts. The total (${rosterTotal?.toLocaleString() ?? '...'}) reflects unique volunteers.
+                        appear in both counts. The total (${((rosterTotal ?? 0) + (rosterSelfRostered ?? 0)).toLocaleString()}) reflects confirmed + self-rostered volunteers.
                     </div>
                 </div>
             `;
@@ -876,15 +887,48 @@ The election has now been called! We need people to hand out 'How to Vote' cards
             const statusEl = popup.querySelector('.gus-breakdown-status');
             const svgEl = popup.querySelector('.gus-breakdown-ring svg');
             const pctEl = popup.querySelector('.gus-breakdown-ring .gus-roster-pct');
-            const progressArc = popup.querySelector('.gus-ring-progress');
-            const progressPct = popup.querySelector('.gus-progress-pct');
+            const totalSvg = popup.querySelector('.gus-total-ring svg');
+            const totalPctEl = popup.querySelector('.gus-total-pct');
 
-            function updateProgressRing() {
-                const circ2 = 2 * Math.PI * 40;
-                const pct = Math.min((rosterTotal || 0) / ROSTER_TARGET, 1);
-                const filled = pct * circ2;
-                progressArc.setAttribute('stroke-dasharray', `${filled} ${circ2 - filled}`);
-                progressPct.textContent = `${Math.round(pct * 100)}%`;
+            function updateTotalRing() {
+                const heysen = rosterHeysen ?? 0;
+                const other = (rosterTotal ?? 0) - heysen;
+                const selfR = rosterSelfRostered ?? 0;
+                const grandTotal = (rosterTotal ?? 0) + selfR;
+                const pct = Math.min(grandTotal / ROSTER_TARGET, 1);
+
+                totalPctEl.textContent = `${Math.round(pct * 100)}%`;
+                totalPctEl.dataset.default = `${Math.round(pct * 100)}%`;
+
+                totalSvg.querySelectorAll('.gus-ring-seg').forEach(el => el.remove());
+
+                const r = 40;
+                const circ = 2 * Math.PI * r;
+                const segs = [
+                    { color: HEYSEN_COLOR, count: heysen, label: `Heysen: ${heysen}` },
+                    { color: OTHER_COLOR, count: other, label: `Other: ${other}` },
+                    { color: SELF_ROSTERED_COLOR, count: selfR, label: `Self-rostered: ${selfR}` }
+                ];
+                let rotation = 0;
+                for (const seg of segs) {
+                    const segPct = seg.count / ROSTER_TARGET;
+                    const len = Math.min(segPct, 1) * circ;
+                    if (len < 0.1) continue;
+                    const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+                    circle.setAttribute('class', 'gus-ring-seg');
+                    circle.setAttribute('cx', '50');
+                    circle.setAttribute('cy', '50');
+                    circle.setAttribute('r', r);
+                    circle.setAttribute('stroke', seg.color);
+                    circle.setAttribute('stroke-dasharray', `${len} ${circ - len}`);
+                    circle.dataset.hoverText = seg.label;
+                    circle.style.transform = `rotate(${rotation}deg)`;
+                    circle.style.transformOrigin = '50% 50%';
+                    totalSvg.appendChild(circle);
+                    circle.addEventListener('mouseenter', () => { totalPctEl.textContent = seg.label; });
+                    circle.addEventListener('mouseleave', () => { totalPctEl.textContent = totalPctEl.dataset.default; });
+                    rotation += segPct * 360;
+                }
             }
 
             function updateLegendList(resultData) {
@@ -934,7 +978,7 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                 }
 
                 updateLegendList(resultData);
-                updateProgressRing();
+                updateTotalRing();
             }
 
             function cacheAgeText(ts) {
@@ -978,7 +1022,7 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                 const ordered = getPrioritisedElectorates();
                 const loadingHint = 'You can close this and come back — data loads in the background';
                 showStatus(`Loading 0 / ${ordered.length}...`, false, loadingHint);
-                updateProgressRing();
+                updateTotalRing();
 
                 ordered.forEach(([name, id], i) => {
                     setTimeout(() => {
@@ -1000,7 +1044,7 @@ The election has now been called! We need people to hand out 'How to Vote' cards
             }
 
             // Show progress ring immediately (rosterTotal already known)
-            updateProgressRing();
+            updateTotalRing();
 
             // Use cache if fresh (< 30 min), otherwise fetch
             const CACHE_TTL = 30 * 60 * 1000;
@@ -1030,21 +1074,26 @@ The election has now been called! We need people to hand out 'How to Vote' cards
             if (rosterTotal !== null) {
                 const heysen = rosterHeysen ?? 0;
                 const other = rosterTotal - heysen;
+                const selfRostered = rosterSelfRostered ?? 0;
+                const grandTotal = rosterTotal + selfRostered;
                 const heysenPct = Math.min((heysen / ROSTER_TARGET) * 100, 100);
                 const otherPct = Math.min((other / ROSTER_TARGET) * 100, 100 - heysenPct);
-                const totalPct = Math.round(Math.min((rosterTotal / ROSTER_TARGET) * 100, 100));
+                const selfPct = Math.min((selfRostered / ROSTER_TARGET) * 100, Math.max(100 - heysenPct - otherPct, 0));
+                const totalPct = Math.round(Math.min((grandTotal / ROSTER_TARGET) * 100, 100));
 
                 const segments = [
                     { color: HEYSEN_COLOR, pct: heysenPct, label: `${heysen}` },
-                    { color: OTHER_COLOR, pct: otherPct, label: `${other}` }
+                    { color: OTHER_COLOR, pct: otherPct, label: `${other}` },
+                    { color: SELF_ROSTERED_COLOR, pct: selfPct, label: `${selfRostered}` }
                 ];
 
                 body.innerHTML = `
                     ${buildRingHtml(segments, totalPct + '%')}
-                    <span class="gus-roster-count"><strong>${rosterTotal.toLocaleString()}</strong> (${heysen.toLocaleString()}) / ${ROSTER_TARGET.toLocaleString()}</span>
+                    <span class="gus-roster-count"><strong>${grandTotal.toLocaleString()}</strong> / ${ROSTER_TARGET.toLocaleString()}</span>
                     <div class="gus-roster-legend">
                         <span><span class="gus-dot" style="background:${HEYSEN_COLOR};"></span>Heysen</span>
                         <span><span class="gus-dot" style="background:${OTHER_COLOR};"></span>Other</span>
+                        <span><span class="gus-dot" style="background:${SELF_ROSTERED_COLOR};"></span>Self-rostered</span>
                     </div>
                 `;
                 attachRingHover(widget);
