@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         List Manager Tweaks
 // @namespace    https://github.com/choujar/campaign-userscripts
-// @version      1.26.3
+// @version      1.26.4
 // @description  UX improvements for List Manager and Rocket
 // @author       Sahil Choujar
 // @match        https://listmanager.greens.org.au/*
@@ -868,7 +868,7 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                                 </svg>
                                 <span class="gus-roster-pct gus-total-pct">0%</span>
                             </div>
-                            <div class="gus-breakdown-ring-label"><span style="color:${HEYSEN_COLOR};">${(rosterHeysen ?? 0).toLocaleString()}</span> + <span style="color:${OTHER_COLOR};">${((rosterTotal ?? 0) - (rosterHeysen ?? 0)).toLocaleString()}</span> + <span style="color:${SELF_ROSTERED_COLOR};">${(rosterSelfRostered ?? 0).toLocaleString()}</span> / ${ROSTER_TARGET.toLocaleString()}</div>
+                            <div class="gus-breakdown-ring-label"><strong>${((rosterTotal ?? 0) + (rosterSelfRostered ?? 0)).toLocaleString()}</strong> <span style="color:${HEYSEN_COLOR};">(${(rosterHeysen ?? 0).toLocaleString()})</span> <span style="color:${SELF_ROSTERED_COLOR};">(${(rosterSelfRostered ?? 0).toLocaleString()})</span> / ${ROSTER_TARGET.toLocaleString()}</div>
                         </div>
                     </div>
                     <div class="gus-breakdown-status">Loading 0 / ${ALL_ELECTORATES.length}...</div>
