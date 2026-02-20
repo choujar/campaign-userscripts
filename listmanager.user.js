@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         List Manager Tweaks
 // @namespace    https://github.com/choujar/campaign-userscripts
-// @version      1.27.0
+// @version      1.27.1
 // @description  UX improvements for List Manager and Rocket
 // @author       Sahil Choujar
 // @match        https://listmanager.greens.org.au/*
@@ -302,9 +302,12 @@
             }
             .gus-roster-legend {
                 display: flex;
-                gap: 10px;
+                flex-wrap: wrap;
+                justify-content: center;
+                gap: 4px 10px;
                 font-size: 11px;
                 color: #666;
+                max-width: 200px;
             }
             .gus-roster-legend span {
                 display: flex;
@@ -731,6 +734,10 @@ The election has now been called! We need people to hand out 'How to Vote' cards
             }
             rosterLoading = true;
             rosterError = null;
+            rosterTotal = null;
+            rosterHeysen = null;
+            rosterSelfRostered = null;
+            rosterEarlyVoting = null;
             updateRosterWidget();
 
             let done = 0;
@@ -1087,13 +1094,16 @@ The election has now been called! We need people to hand out 'How to Vote' cards
             if (!body) return;
 
             if (rosterLoading) {
-                const parts = [];
-                if (rosterTotal !== null) parts.push('Confirmed');
-                if (rosterHeysen !== null) parts.push('Heysen');
-                if (rosterSelfRostered !== null) parts.push('Self-rostered');
-                if (rosterEarlyVoting !== null) parts.push('Early voting');
-                const status = parts.length ? parts.join(', ') + ' ✓' : 'Fetching data...';
-                body.innerHTML = `<span class="gus-roster-loading"><span class="gus-spinner"></span> ${escapeHtml(status)}</span>`;
+                const labels = [
+                    ['Confirmed', rosterTotal],
+                    ['Heysen', rosterHeysen],
+                    ['Self-rostered', rosterSelfRostered],
+                    ['Early voting', rosterEarlyVoting]
+                ];
+                const lines = labels.map(([name, val]) =>
+                    val !== null ? `<div style="color:#4caf50;">✓ ${escapeHtml(name)}</div>` : `<div style="color:#999;">${escapeHtml(name)}...</div>`
+                ).join('');
+                body.innerHTML = `<span class="gus-roster-loading"><span class="gus-spinner"></span><div style="display:flex;flex-direction:column;gap:1px;font-size:12px;">${lines}</div></span>`;
                 return;
             }
             if (rosterError) {
