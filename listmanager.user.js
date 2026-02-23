@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         List Manager Tweaks
 // @namespace    https://github.com/choujar/campaign-userscripts
-// @version      1.27.1
+// @version      1.28.0
 // @description  UX improvements for List Manager and Rocket
 // @author       Sahil Choujar
 // @match        https://listmanager.greens.org.au/*
@@ -202,6 +202,160 @@
             }
         });
     }
+
+    // --- Shared: default template body + multi-template storage ---
+    const DEFAULT_TEMPLATE_BODY = `Hi [their name], this is [your name] from the SA Greens.
+
+The election has now been called! We need people to hand out 'How to Vote' cards at polling booths across [electorate] ([suburb]) on election day (21st of March). If you are able to help I can roster you on at a time and place that suits.`;
+
+    function getGlobalTemplatesKey() { return 'smsTemplates_global'; }
+    function getListTemplatesKey(listId) { return 'smsTemplates_' + listId; }
+    function getLastTemplateKey(listId) { return 'smsLastTemplate_' + listId; }
+
+    function migrateTemplates(listId) {
+        const existing = GM_getValue(getListTemplatesKey(listId), null);
+        if (existing !== null) return;
+        const oldTemplate = GM_getValue('smsTemplate_' + listId, null);
+        if (oldTemplate !== null) {
+            GM_setValue(getListTemplatesKey(listId), JSON.stringify([
+                { name: 'Default', body: oldTemplate }
+            ]));
+        }
+    }
+
+    function migrateGlobalTemplates() {
+        const existing = GM_getValue(getGlobalTemplatesKey(), null);
+        if (existing !== null) return;
+        const shared = GM_getValue('smsTemplate_current', null);
+        if (shared) {
+            GM_setValue(getGlobalTemplatesKey(), JSON.stringify([
+                { name: 'Default', body: shared }
+            ]));
+        }
+    }
+
+    function loadTemplates(listId) {
+        if (listId) migrateTemplates(listId);
+        migrateGlobalTemplates();
+        const globalRaw = GM_getValue(getGlobalTemplatesKey(), null);
+        const global = globalRaw ? JSON.parse(globalRaw) : [];
+        const listRaw = listId ? GM_getValue(getListTemplatesKey(listId), null) : null;
+        const list = listRaw ? JSON.parse(listRaw) : [];
+        return { global, list };
+    }
+
+    function resolveTemplates(listId) {
+        const { global, list } = loadTemplates(listId);
+        const merged = new Map();
+        global.forEach(t => merged.set(t.name, { ...t, scope: 'global' }));
+        list.forEach(t => merged.set(t.name, { ...t, scope: 'list' }));
+        const result = Array.from(merged.values());
+        if (result.length === 0) {
+            result.push({ name: 'Default', body: DEFAULT_TEMPLATE_BODY, scope: 'default' });
+        }
+        return result;
+    }
+
+    function saveGlobalTemplates(templates) {
+        GM_setValue(getGlobalTemplatesKey(), JSON.stringify(templates));
+    }
+
+    function saveListTemplates(listId, templates) {
+        GM_setValue(getListTemplatesKey(listId), JSON.stringify(templates));
+        if (templates.length > 0) {
+            GM_setValue('smsTemplate_current', templates[0].body);
+        }
+    }
+
+    // --- Multi-template CSS ---
+    GM_addStyle(`
+        .gus-tmpl-section { margin-bottom: 20px; }
+        .gus-tmpl-section h3 {
+            font-size: 14px; font-weight: 600; color: #444;
+            margin: 0 0 8px 0; padding-bottom: 4px;
+            border-bottom: 1px solid #e0e0e0;
+        }
+        .gus-tmpl-list { display: flex; flex-direction: column; gap: 4px; margin-bottom: 8px; }
+        .gus-tmpl-row {
+            display: flex; align-items: center;
+            padding: 6px 10px; border-radius: 6px;
+            background: #fafafa; border: 1px solid #e8e8e8;
+        }
+        .gus-tmpl-row:hover { background: #f0f0f0; }
+        .gus-tmpl-name {
+            flex: 1; font-size: 14px; color: #333;
+            overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+        }
+        .gus-tmpl-scope-badge {
+            font-size: 11px; color: #888; margin-left: 6px; font-style: italic;
+        }
+        .gus-tmpl-actions { display: flex; gap: 4px; margin-left: 8px; }
+        .gus-tmpl-actions button {
+            background: none; border: 1px solid transparent; border-radius: 4px;
+            cursor: pointer; font-size: 14px; padding: 2px 6px; color: #666;
+        }
+        .gus-tmpl-actions button:hover { background: #e0e0e0; border-color: #ccc; }
+        .gus-tmpl-actions button.gus-tmpl-delete:hover { color: #d32f2f; }
+        .gus-tmpl-editor {
+            padding: 10px; background: #fff; border: 1px solid #2e7d32;
+            border-radius: 8px; margin-top: 4px;
+        }
+        .gus-tmpl-editor input {
+            width: 100%; padding: 6px 8px; border: 1px solid #ccc;
+            border-radius: 4px; font-size: 14px; font-family: inherit;
+            margin-bottom: 8px; box-sizing: border-box;
+        }
+        .gus-tmpl-editor input:focus, .gus-tmpl-editor textarea:focus {
+            outline: none; border-color: #2e7d32;
+            box-shadow: 0 0 0 2px rgba(46,125,50,0.15);
+        }
+        .gus-tmpl-editor textarea {
+            width: 100%; min-height: 100px; padding: 8px;
+            border: 1px solid #ccc; border-radius: 4px;
+            font-size: 13px; font-family: inherit; line-height: 1.5;
+            resize: vertical; box-sizing: border-box;
+        }
+        .gus-tmpl-editor-actions {
+            display: flex; justify-content: flex-end; gap: 6px; margin-top: 8px;
+        }
+        .gus-tmpl-editor-actions button {
+            padding: 4px 12px; border-radius: 4px; border: 1px solid #ccc;
+            background: white; cursor: pointer; font-size: 13px;
+        }
+        .gus-tmpl-editor-actions .gus-tmpl-save-btn {
+            background: #2e7d32; color: white; border-color: #2e7d32;
+        }
+        .gus-tmpl-editor-actions .gus-tmpl-save-btn:hover { background: #256b29; }
+        .gus-tmpl-add {
+            display: inline-flex; align-items: center; gap: 4px;
+            padding: 4px 10px; border-radius: 4px; border: 1px dashed #999;
+            background: transparent; cursor: pointer; font-size: 13px; color: #555;
+        }
+        .gus-tmpl-add:hover { background: #f0f0f0; border-color: #666; }
+        .gus-tmpl-empty { font-size: 13px; color: #999; font-style: italic; padding: 8px 0; }
+        .gus-tmpl-confirm {
+            display: inline-flex; align-items: center; gap: 6px;
+            font-size: 12px; color: #d32f2f;
+        }
+        .gus-tmpl-confirm button {
+            padding: 2px 8px; border-radius: 3px; border: 1px solid;
+            cursor: pointer; font-size: 12px; background: white;
+        }
+        .gus-tmpl-pills { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+        .gus-tmpl-pill {
+            padding: 4px 12px; border-radius: 16px; border: 1px solid #ccc;
+            background: white; cursor: pointer; font-size: 13px; font-family: inherit;
+            color: #555; max-width: 160px; overflow: hidden; text-overflow: ellipsis;
+            white-space: nowrap; transition: background 0.15s, color 0.15s, border-color 0.15s;
+        }
+        .gus-tmpl-pill:hover:not(.gus-tmpl-pill-active) { background: #f0f0f0; border-color: #999; }
+        .gus-tmpl-pill-active {
+            background: #2e7d32; color: white; border-color: #2e7d32; cursor: default;
+        }
+        .gus-tmpl-pill-single {
+            cursor: default; background: #f5f5f5; border-color: #ddd; color: #555;
+        }
+    `);
 
     // --- List Manager ---
     if (IS_LISTMANAGER) {
@@ -485,9 +639,7 @@
             }
         `);
 
-        const DEFAULT_TEMPLATE = `Hi [their name], this is [your name] from the SA Greens.
-
-The election has now been called! We need people to hand out 'How to Vote' cards at polling booths across [electorate] ([suburb]) on election day (21st of March). If you are able to help I can roster you on at a time and place that suits.`;
+        const DEFAULT_TEMPLATE = DEFAULT_TEMPLATE_BODY;
 
         function getListId() {
             const match = window.location.pathname.match(/\/lists\/(\d+)/);
@@ -499,68 +651,169 @@ The election has now been called! We need people to hand out 'How to Vote' cards
             return heading ? heading.textContent.trim() : null;
         }
 
+        // Legacy wrappers (kept for backwards compat)
         function getStorageKey(listId) { return 'smsTemplate_' + listId; }
         function getListNameKey(listId) { return 'smsTemplateListName_' + listId; }
-
-        function loadTemplate(listId) { return GM_getValue(getStorageKey(listId), null); }
-
-        function saveTemplate(listId, template, listName) {
-            GM_setValue(getStorageKey(listId), template);
-            // Also save as the shared template for Rocket to read
-            GM_setValue('smsTemplate_current', template);
-            if (listName) {
-                GM_setValue(getListNameKey(listId), listName);
-            }
+        function loadTemplate(listId) {
+            const templates = resolveTemplates(listId);
+            return templates.length > 0 ? templates[0].body : null;
         }
 
         function createTemplateModal(listId, listName) {
-            const existing = loadTemplate(listId);
-            const template = existing !== null ? existing : DEFAULT_TEMPLATE;
+            const { global: globalTmpls, list: listTmpls } = loadTemplates(listId);
 
             const overlay = document.createElement('div');
             overlay.className = 'gus-overlay';
-
-            const savedListName = GM_getValue(getListNameKey(listId), null);
-            const nameChanged = savedListName && listName && savedListName !== listName;
-
-            overlay.innerHTML = `
-                <div class="gus-modal">
-                    <h2>Templates</h2>
-                    <div class="gus-list-label">List: ${escapeHtml(listName || listId)}</div>
-                    ${nameChanged ? `
-                        <div class="gus-banner">
-                            This is a different list${savedListName ? ` (was: ${escapeHtml(savedListName)})` : ''}. Check the template is still appropriate.
-                        </div>
-                    ` : ''}
-                    <label for="gus-sms-template">SMS Template</label>
-                    <textarea id="gus-sms-template">${escapeHtml(template)}</textarea>
-                    <div class="gus-modal-actions">
-                        <button class="gus-cancel">Cancel</button>
-                        <button class="gus-save">Save</button>
-                    </div>
-                </div>
-            `;
-
-            overlay.querySelector('.gus-cancel').addEventListener('click', () => overlay.remove());
             dismissOnEscapeOrClickOutside(overlay);
 
-            overlay.querySelector('.gus-save').addEventListener('click', () => {
-                const val = overlay.querySelector('#gus-sms-template').value;
-                saveTemplate(listId, val, listName);
-                updateButtonState(listId);
-                overlay.remove();
-            });
+            let editingScope = null; // 'global' or 'list'
+            let editingIndex = -1;
+            let addingScope = null;
 
+            function render() {
+                const modal = document.createElement('div');
+                modal.className = 'gus-modal';
+                modal.innerHTML = `
+                    <h2>SMS Templates</h2>
+                    <div class="gus-list-label">List: ${escapeHtml(listName || listId)}</div>
+                `;
+
+                function buildSection(title, templates, scope) {
+                    const section = document.createElement('div');
+                    section.className = 'gus-tmpl-section';
+                    section.innerHTML = `<h3>${escapeHtml(title)}</h3>`;
+
+                    const list = document.createElement('div');
+                    list.className = 'gus-tmpl-list';
+
+                    if (templates.length === 0 && addingScope !== scope) {
+                        list.innerHTML = '<div class="gus-tmpl-empty">No templates yet</div>';
+                    }
+
+                    templates.forEach((tmpl, idx) => {
+                        if (editingScope === scope && editingIndex === idx) {
+                            const editor = buildEditor(tmpl.name, tmpl.body, (name, body) => {
+                                templates[idx] = { name, body };
+                                if (scope === 'global') saveGlobalTemplates(templates);
+                                else saveListTemplates(listId, templates);
+                                editingScope = null; editingIndex = -1;
+                                render();
+                            }, () => { editingScope = null; editingIndex = -1; render(); });
+                            list.appendChild(editor);
+                        } else {
+                            const row = document.createElement('div');
+                            row.className = 'gus-tmpl-row';
+                            row.innerHTML = `
+                                <span class="gus-tmpl-name" title="${escapeHtml(tmpl.name)}">${escapeHtml(tmpl.name)}</span>
+                                <div class="gus-tmpl-actions">
+                                    <button class="gus-tmpl-edit" title="Edit">&#9998;</button>
+                                    <button class="gus-tmpl-delete" title="Delete">&#10005;</button>
+                                </div>
+                            `;
+                            row.querySelector('.gus-tmpl-edit').addEventListener('click', () => {
+                                editingScope = scope; editingIndex = idx; addingScope = null;
+                                render();
+                            });
+                            row.querySelector('.gus-tmpl-delete').addEventListener('click', (e) => {
+                                const btn = e.currentTarget;
+                                if (btn.dataset.confirming) {
+                                    templates.splice(idx, 1);
+                                    if (scope === 'global') saveGlobalTemplates(templates);
+                                    else saveListTemplates(listId, templates);
+                                    render();
+                                } else {
+                                    btn.dataset.confirming = 'true';
+                                    btn.innerHTML = 'Delete?';
+                                    btn.style.color = '#d32f2f';
+                                    btn.style.fontSize = '12px';
+                                    setTimeout(() => {
+                                        if (btn.isConnected) {
+                                            btn.innerHTML = '&#10005;';
+                                            btn.style.color = '';
+                                            btn.style.fontSize = '';
+                                            delete btn.dataset.confirming;
+                                        }
+                                    }, 3000);
+                                }
+                            });
+                            list.appendChild(row);
+                        }
+                    });
+
+                    if (addingScope === scope) {
+                        const editor = buildEditor('', '', (name, body) => {
+                            templates.push({ name, body });
+                            if (scope === 'global') saveGlobalTemplates(templates);
+                            else saveListTemplates(listId, templates);
+                            addingScope = null;
+                            render();
+                        }, () => { addingScope = null; render(); });
+                        list.appendChild(editor);
+                    }
+
+                    section.appendChild(list);
+
+                    if (addingScope !== scope) {
+                        const addBtn = document.createElement('button');
+                        addBtn.className = 'gus-tmpl-add';
+                        addBtn.textContent = '+ Add template';
+                        addBtn.addEventListener('click', () => {
+                            addingScope = scope; editingScope = null; editingIndex = -1;
+                            render();
+                        });
+                        section.appendChild(addBtn);
+                    }
+
+                    return section;
+                }
+
+                function buildEditor(initialName, initialBody, onSave, onCancel) {
+                    const editor = document.createElement('div');
+                    editor.className = 'gus-tmpl-editor';
+                    editor.innerHTML = `
+                        <input type="text" placeholder="Template name" value="${escapeHtml(initialName)}">
+                        <textarea placeholder="Message body — use [their name], [your name], [electorate], [suburb]">${escapeHtml(initialBody)}</textarea>
+                        <div class="gus-tmpl-editor-actions">
+                            <button class="gus-tmpl-cancel-btn">Cancel</button>
+                            <button class="gus-tmpl-save-btn">Save</button>
+                        </div>
+                    `;
+                    editor.querySelector('.gus-tmpl-cancel-btn').addEventListener('click', onCancel);
+                    editor.querySelector('.gus-tmpl-save-btn').addEventListener('click', () => {
+                        const name = editor.querySelector('input').value.trim();
+                        const body = editor.querySelector('textarea').value.trim();
+                        if (!name) { editor.querySelector('input').style.borderColor = '#d32f2f'; return; }
+                        if (!body) { editor.querySelector('textarea').style.borderColor = '#d32f2f'; return; }
+                        onSave(name, body);
+                    });
+                    setTimeout(() => editor.querySelector('input').focus(), 50);
+                    return editor;
+                }
+
+                modal.appendChild(buildSection('Global Templates', globalTmpls, 'global'));
+                modal.appendChild(buildSection(`Templates for "${escapeHtml(listName || listId)}"`, listTmpls, 'list'));
+
+                const actions = document.createElement('div');
+                actions.className = 'gus-modal-actions';
+                actions.innerHTML = '<button class="gus-cancel">Close</button>';
+                actions.querySelector('.gus-cancel').addEventListener('click', () => overlay.remove());
+                modal.appendChild(actions);
+
+                overlay.innerHTML = '';
+                overlay.appendChild(modal);
+            }
+
+            render();
             document.body.appendChild(overlay);
-            overlay.querySelector('#gus-sms-template').focus();
         }
 
         function updateButtonState(listId) {
             const btn = document.querySelector('.gus-template-btn');
             if (!btn) return;
-            const hasTemplate = loadTemplate(listId) !== null;
-            btn.classList.toggle('has-template', hasTemplate);
-            btn.title = hasTemplate ? 'Edit SMS template' : 'Set up SMS template';
+            const { global: g, list: l } = loadTemplates(listId);
+            const hasTemplates = g.length > 0 || l.length > 0;
+            btn.classList.toggle('has-template', hasTemplates);
+            btn.title = hasTemplates ? 'Manage SMS templates' : 'Set up SMS templates';
         }
 
         function injectButton() {
@@ -575,9 +828,10 @@ The election has now been called! We need people to hand out 'How to Vote' cards
             btn.className = 'gus-template-btn';
             btn.innerHTML = '&#9881;';
 
-            const hasTemplate = loadTemplate(listId) !== null;
-            btn.classList.toggle('has-template', hasTemplate);
-            btn.title = hasTemplate ? 'Edit SMS template' : 'Set up SMS template';
+            const { global: g, list: l } = loadTemplates(listId);
+            const hasTemplates = g.length > 0 || l.length > 0;
+            btn.classList.toggle('has-template', hasTemplates);
+            btn.title = hasTemplates ? 'Manage SMS templates' : 'Set up SMS templates';
 
             btn.addEventListener('click', (e) => {
                 e.stopPropagation();
@@ -1673,9 +1927,7 @@ The election has now been called! We need people to hand out 'How to Vote' cards
             }
         `);
 
-        const DEFAULT_TEMPLATE_ROCKET = `Hi [their name], this is [your name] from the SA Greens.
-
-The election has now been called! We need people to hand out 'How to Vote' cards at polling booths across [electorate] ([suburb]) on election day (21st of March). If you are able to help I can roster you on at a time and place that suits.`;
+        const DEFAULT_TEMPLATE_ROCKET = DEFAULT_TEMPLATE_BODY;
 
         function getContactName() {
             const h2 = document.querySelector('h2.ng-binding');
@@ -2027,14 +2279,17 @@ The election has now been called! We need people to hand out 'How to Vote' cards
         }
 
         function getRocketTemplate() {
-            // Try current list's template first, then shared, then default
             const m = window.location.pathname.match(/\/lists\/(\d+)/);
-            if (m) {
-                const listTemplate = GM_getValue('smsTemplate_' + m[1], null);
-                if (listTemplate) return listTemplate;
+            const listId = m ? m[1] : null;
+            const templates = resolveTemplates(listId);
+            if (listId) {
+                const lastUsedName = GM_getValue(getLastTemplateKey(listId), null);
+                if (lastUsedName) {
+                    const found = templates.find(t => t.name === lastUsedName);
+                    if (found) return found.body;
+                }
             }
-            const shared = GM_getValue('smsTemplate_current', null);
-            return shared || DEFAULT_TEMPLATE_ROCKET;
+            return templates[0].body;
         }
 
         function sameIgnoreCase(a, b) {
@@ -2115,8 +2370,20 @@ The election has now been called! We need people to hand out 'How to Vote' cards
         }
 
         function showSmsModal(phone, contactName, suburb) {
-            const template = getRocketTemplate();
-            const showNameInput = /\[your name\]/i.test(template);
+            const listMatch = window.location.pathname.match(/\/lists\/(\d+)/);
+            const listId = listMatch ? listMatch[1] : null;
+            const templates = resolveTemplates(listId);
+
+            // Restore last-used template
+            const lastUsedName = listId ? GM_getValue(getLastTemplateKey(listId), null) : null;
+            let activeIndex = 0;
+            if (lastUsedName) {
+                const idx = templates.findIndex(t => t.name === lastUsedName);
+                if (idx >= 0) activeIndex = idx;
+            }
+
+            let currentTemplate = templates[activeIndex].body;
+            const showNameInput = templates.some(t => /\[your name\]/i.test(t.body));
             let yourName = getYourName();
 
             const overlay = document.createElement('div');
@@ -2124,8 +2391,8 @@ The election has now been called! We need people to hand out 'How to Vote' cards
             let currentElectorate = null;
 
             function updatePreview() {
-                const filled = fillTemplate(template, contactName.preferred, suburb, currentElectorate, yourName);
-                const previewHtml = fillTemplateForPreview(template, contactName.preferred, suburb, currentElectorate, yourName);
+                const filled = fillTemplate(currentTemplate, contactName.preferred, suburb, currentElectorate, yourName);
+                const previewHtml = fillTemplateForPreview(currentTemplate, contactName.preferred, suburb, currentElectorate, yourName);
                 const preview = overlay.querySelector('.gus-preview');
                 const sendLink = overlay.querySelector('.gus-send');
                 if (preview) preview.innerHTML = previewHtml;
@@ -2137,13 +2404,26 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                 const nameInputVal = overlay.querySelector('.gus-your-name-input');
                 if (nameInputVal) yourName = nameInputVal.value.trim() || null;
 
-                const filled = fillTemplate(template, contactName.preferred, suburb, electorate, yourName);
-                const previewHtml = fillTemplateForPreview(template, contactName.preferred, suburb, electorate, yourName);
+                const filled = fillTemplate(currentTemplate, contactName.preferred, suburb, electorate, yourName);
+                const previewHtml = fillTemplateForPreview(currentTemplate, contactName.preferred, suburb, electorate, yourName);
+
+                // Build pill bar
+                let pillsHtml = '';
+                if (templates.length > 1) {
+                    pillsHtml = '<div class="gus-tmpl-pills">' +
+                        templates.map((t, i) =>
+                            `<button class="gus-tmpl-pill${i === activeIndex ? ' gus-tmpl-pill-active' : ''}" data-idx="${i}" title="${escapeHtml(t.name)}">${escapeHtml(t.name)}</button>`
+                        ).join('') +
+                        '</div>';
+                } else if (templates.length === 1 && templates[0].scope !== 'default') {
+                    pillsHtml = `<div class="gus-tmpl-pills"><span class="gus-tmpl-pill gus-tmpl-pill-single">${escapeHtml(templates[0].name)}</span></div>`;
+                }
 
                 overlay.innerHTML = `
                     <div class="gus-modal">
                         <h2>Send SMS</h2>
                         <div class="gus-to">To: ${escapeHtml(contactName.preferred)} (${escapeHtml(phone.display)})</div>
+                        ${pillsHtml}
                         ${showNameInput ? `
                             <div class="gus-name-row">
                                 <label>Your name:</label>
@@ -2160,15 +2440,34 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                     </div>
                 `;
 
+                // Pill click handlers
+                overlay.querySelectorAll('.gus-tmpl-pill[data-idx]').forEach(pill => {
+                    pill.addEventListener('click', () => {
+                        const idx = parseInt(pill.dataset.idx, 10);
+                        if (idx === activeIndex) return;
+                        activeIndex = idx;
+                        currentTemplate = templates[activeIndex].body;
+                        if (listId) GM_setValue(getLastTemplateKey(listId), templates[activeIndex].name);
+                        // Update pills visually
+                        overlay.querySelectorAll('.gus-tmpl-pill[data-idx]').forEach((p, i) => {
+                            p.classList.toggle('gus-tmpl-pill-active', i === activeIndex);
+                        });
+                        updatePreview();
+                    });
+                });
+
                 overlay.querySelector('.gus-cancel').addEventListener('click', () => overlay.remove());
                 overlay.querySelector('.gus-copy-sms').addEventListener('click', (e) => {
-                    const currentFilled = fillTemplate(template, contactName.preferred, suburb, currentElectorate, yourName);
+                    const currentFilled = fillTemplate(currentTemplate, contactName.preferred, suburb, currentElectorate, yourName);
+                    GM_setValue('smsTemplate_current', currentTemplate);
                     copyToClipboard(currentFilled).then(() => {
                         e.target.textContent = 'Copied!';
                         setTimeout(() => { e.target.textContent = 'Copy SMS'; }, 1500);
                     });
                 });
                 overlay.querySelector('.gus-send').addEventListener('click', () => {
+                    GM_setValue('smsTemplate_current', currentTemplate);
+                    if (listId) GM_setValue(getLastTemplateKey(listId), templates[activeIndex].name);
                     setTimeout(() => overlay.remove(), 300);
                 });
 
