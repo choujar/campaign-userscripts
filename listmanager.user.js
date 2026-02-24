@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         List Manager Tweaks
 // @namespace    https://github.com/choujar/campaign-userscripts
-// @version      1.28.0
+// @version      1.29.0
 // @description  UX improvements for List Manager and Rocket
 // @author       Sahil Choujar
 // @match        https://listmanager.greens.org.au/*
@@ -648,7 +648,13 @@ The election has now been called! We need people to hand out 'How to Vote' cards
 
         function getListName() {
             const heading = document.querySelector('h5.MuiTypography-h5');
-            return heading ? heading.textContent.trim() : null;
+            if (!heading) return null;
+            for (const node of heading.childNodes) {
+                if (node.nodeType === Node.TEXT_NODE && node.textContent.trim()) {
+                    return node.textContent.trim();
+                }
+            }
+            return heading.textContent.trim();
         }
 
         // Legacy wrappers (kept for backwards compat)
@@ -1769,6 +1775,43 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                 outline: none;
                 border-color: #2e7d32;
             }
+            .gus-ppb-row {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                margin-bottom: 12px;
+            }
+            .gus-ppb-row label {
+                font-size: 13px;
+                font-weight: 500;
+                color: #555;
+                white-space: nowrap;
+                margin: 0;
+            }
+            .gus-ppb-select {
+                flex: 1;
+                padding: 4px 8px;
+                border: 1px solid #ccc;
+                border-radius: 4px;
+                font-size: 13px;
+                font-family: inherit;
+                background: #fff;
+                cursor: pointer;
+            }
+            .gus-ppb-select:focus {
+                outline: none;
+                border-color: #2e7d32;
+            }
+            .gus-ppb-single {
+                font-size: 13px;
+                color: #2e7d32;
+                font-weight: 500;
+            }
+            .gus-ppb-loading {
+                font-size: 12px;
+                color: #999;
+                font-style: italic;
+            }
             .gus-tasks-table-wrap {
                 margin-top: 10px;
                 padding: 0 15px;
@@ -2298,7 +2341,7 @@ The election has now been called! We need people to hand out 'How to Vote' cards
 
         const FALLBACK_REGION = 'South Australia';
 
-        function fillTemplate(template, name, suburb, electorate, yourName) {
+        function fillTemplate(template, name, suburb, electorate, yourName, ppb) {
             let filled = template;
             const eVal = electorate || FALLBACK_REGION;
             const sVal = suburb || '';
@@ -2309,12 +2352,14 @@ The election has now been called! We need people to hand out 'How to Vote' cards
             filled = filled.replace(/\[your name\]/gi, yourName || '');
             filled = filled.replace(/\[suburb\]/gi, sVal || eVal);
             filled = filled.replace(/\[electorate\]/gi, eVal);
+            filled = filled.replace(/\[ppb_address\]/gi, ppb ? ppb.full : '');
+            filled = filled.replace(/\[ppb\]/gi, ppb ? ppb.name : '');
             filled = filled.replace(/\s*\(\s*\)\s*/g, ' ');
             filled = filled.replace(/  +/g, ' ');
             return filled.trim();
         }
 
-        function fillTemplateForPreview(template, name, suburb, electorate, yourName) {
+        function fillTemplateForPreview(template, name, suburb, electorate, yourName, ppb) {
             let tmpl = template;
             const eVal = electorate || FALLBACK_REGION;
             const sVal = suburb || '';
@@ -2339,6 +2384,13 @@ The election has now been called! We need people to hand out 'How to Vote' cards
             html = html.replace(/\[electorate\]/gi, electorate
                 ? `<span class="gus-filled">${escapeHtml(electorate)}</span>`
                 : `<span class="gus-filled gus-fallback">${escapeHtml(eVal)}</span>`);
+
+            html = html.replace(/\[ppb_address\]/gi, ppb
+                ? `<span class="gus-filled">${escapeHtml(ppb.full)}</span>`
+                : '<span class="gus-placeholder">[ppb_address]</span>');
+            html = html.replace(/\[ppb\]/gi, ppb
+                ? `<span class="gus-filled">${escapeHtml(ppb.name)}</span>`
+                : '<span class="gus-placeholder">[ppb]</span>');
 
             html = html.replace(/\[([^\]]+)\]/g, '<span class="gus-placeholder">[$1]</span>');
 
@@ -2389,10 +2441,17 @@ The election has now been called! We need people to hand out 'How to Vote' cards
             const overlay = document.createElement('div');
             overlay.className = 'gus-overlay';
             let currentElectorate = null;
+            let ppbBooths = [];
+            let selectedPpbIndex = 0;
+
+            function getSelectedPpb() {
+                return ppbBooths.length > 0 ? ppbBooths[selectedPpbIndex] : null;
+            }
 
             function updatePreview() {
-                const filled = fillTemplate(currentTemplate, contactName.preferred, suburb, currentElectorate, yourName);
-                const previewHtml = fillTemplateForPreview(currentTemplate, contactName.preferred, suburb, currentElectorate, yourName);
+                const ppb = getSelectedPpb();
+                const filled = fillTemplate(currentTemplate, contactName.preferred, suburb, currentElectorate, yourName, ppb);
+                const previewHtml = fillTemplateForPreview(currentTemplate, contactName.preferred, suburb, currentElectorate, yourName, ppb);
                 const preview = overlay.querySelector('.gus-preview');
                 const sendLink = overlay.querySelector('.gus-send');
                 if (preview) preview.innerHTML = previewHtml;
@@ -2404,8 +2463,9 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                 const nameInputVal = overlay.querySelector('.gus-your-name-input');
                 if (nameInputVal) yourName = nameInputVal.value.trim() || null;
 
-                const filled = fillTemplate(currentTemplate, contactName.preferred, suburb, electorate, yourName);
-                const previewHtml = fillTemplateForPreview(currentTemplate, contactName.preferred, suburb, electorate, yourName);
+                const ppb = getSelectedPpb();
+                const filled = fillTemplate(currentTemplate, contactName.preferred, suburb, electorate, yourName, ppb);
+                const previewHtml = fillTemplateForPreview(currentTemplate, contactName.preferred, suburb, electorate, yourName, ppb);
 
                 // Build pill bar
                 let pillsHtml = '';
@@ -2419,6 +2479,30 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                     pillsHtml = `<div class="gus-tmpl-pills"><span class="gus-tmpl-pill gus-tmpl-pill-single">${escapeHtml(templates[0].name)}</span></div>`;
                 }
 
+                // Build PPB row
+                const hasPpbPlaceholder = /\[ppb(_address)?\]/i.test(currentTemplate);
+                let ppbRowHtml = '';
+                if (hasPpbPlaceholder) {
+                    if (ppbBooths.length > 1) {
+                        ppbRowHtml = `<div class="gus-ppb-row">
+                            <label>Pre-poll booth:</label>
+                            <select class="gus-ppb-select">
+                                ${ppbBooths.map((b, i) => `<option value="${i}"${i === selectedPpbIndex ? ' selected' : ''}>${escapeHtml(b.full)}</option>`).join('')}
+                            </select>
+                        </div>`;
+                    } else if (ppbBooths.length === 1) {
+                        ppbRowHtml = `<div class="gus-ppb-row">
+                            <label>Pre-poll booth:</label>
+                            <span class="gus-ppb-single">${escapeHtml(ppbBooths[0].name)}</span>
+                        </div>`;
+                    } else if (electorate) {
+                        ppbRowHtml = `<div class="gus-ppb-row">
+                            <label>Pre-poll booth:</label>
+                            <span class="gus-ppb-loading">Loading...</span>
+                        </div>`;
+                    }
+                }
+
                 overlay.innerHTML = `
                     <div class="gus-modal">
                         <h2>Send SMS</h2>
@@ -2430,6 +2514,7 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                                 <input type="text" class="gus-your-name-input" value="${escapeHtml(yourName || '')}" placeholder="Enter your name">
                             </div>
                         ` : ''}
+                        ${ppbRowHtml}
                         <div class="gus-preview-label">Message preview:</div>
                         <div class="gus-preview">${previewHtml}</div>
                         <div class="gus-modal-actions">
@@ -2448,17 +2533,13 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                         activeIndex = idx;
                         currentTemplate = templates[activeIndex].body;
                         if (listId) GM_setValue(getLastTemplateKey(listId), templates[activeIndex].name);
-                        // Update pills visually
-                        overlay.querySelectorAll('.gus-tmpl-pill[data-idx]').forEach((p, i) => {
-                            p.classList.toggle('gus-tmpl-pill-active', i === activeIndex);
-                        });
-                        updatePreview();
+                        renderModal(currentElectorate);
                     });
                 });
 
                 overlay.querySelector('.gus-cancel').addEventListener('click', () => overlay.remove());
                 overlay.querySelector('.gus-copy-sms').addEventListener('click', (e) => {
-                    const currentFilled = fillTemplate(currentTemplate, contactName.preferred, suburb, currentElectorate, yourName);
+                    const currentFilled = fillTemplate(currentTemplate, contactName.preferred, suburb, currentElectorate, yourName, getSelectedPpb());
                     GM_setValue('smsTemplate_current', currentTemplate);
                     copyToClipboard(currentFilled).then(() => {
                         e.target.textContent = 'Copied!';
@@ -2470,6 +2551,14 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                     if (listId) GM_setValue(getLastTemplateKey(listId), templates[activeIndex].name);
                     setTimeout(() => overlay.remove(), 300);
                 });
+
+                const ppbSelect = overlay.querySelector('.gus-ppb-select');
+                if (ppbSelect) {
+                    ppbSelect.addEventListener('change', () => {
+                        selectedPpbIndex = parseInt(ppbSelect.value, 10);
+                        updatePreview();
+                    });
+                }
 
                 const nameInput = overlay.querySelector('.gus-your-name-input');
                 if (nameInput) {
@@ -2487,8 +2576,17 @@ The election has now been called! We need people to hand out 'How to Vote' cards
             document.body.appendChild(overlay);
 
             getElectorateForContact((electorate) => {
-                if (electorate && document.body.contains(overlay)) {
-                    renderModal(electorate);
+                if (!electorate || !document.body.contains(overlay)) return;
+                renderModal(electorate);
+
+                const hasPpbInAnyTemplate = templates.some(t => /\[ppb(_address)?\]/i.test(t.body));
+                if (hasPpbInAnyTemplate) {
+                    fetchPpbBooths(electorate, (booths) => {
+                        if (!document.body.contains(overlay)) return;
+                        ppbBooths = booths;
+                        selectedPpbIndex = 0;
+                        renderModal(electorate);
+                    });
                 }
             });
         }
@@ -2600,6 +2698,77 @@ The election has now been called! We need people to hand out 'How to Vote' cards
             ['Torrens', 140552], ['Unley', 140553], ['Waite', 140554],
             ['West Torrens', 140555], ['Wright', 140556],
         ];
+
+        // --- PPB (Pre-Poll Booth) data ---
+        let ppbCache = {};
+
+        function getElectorateIdByName(name) {
+            if (!name) return null;
+            const entry = ELECTORATES.find(([n]) => n.toLowerCase() === name.toLowerCase());
+            return entry ? entry[1] : null;
+        }
+
+        function sentenceCase(str) {
+            if (!str) return '';
+            return str.toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
+        }
+
+        function extractPpbBooths(data) {
+            const booths = data?.commands?.booths || [];
+            const seen = new Map();
+            for (const b of booths) {
+                if (b.info.prepoll === '0' || b.info.defunct === '1') continue;
+                const name = b.info.premises || b.info.name;
+                const addr1 = b.info.address1 || '';
+                const suburb = b.info.address_suburb || '';
+                const key = (name + '|' + addr1 + '|' + suburb).toLowerCase();
+                if (!seen.has(key)) {
+                    const addrParts = [addr1, sentenceCase(suburb)].filter(Boolean);
+                    seen.set(key, {
+                        name: name,
+                        addressLine: addrParts.join(', '),
+                        full: name + (addrParts.length ? ' (' + addrParts.join(', ') + ')' : '')
+                    });
+                }
+            }
+            return Array.from(seen.values());
+        }
+
+        function fetchPpbBooths(electorateName, callback) {
+            if (!electorateName) { callback([]); return; }
+
+            const cached = ppbCache[electorateName];
+            if (cached && !cached.loading) { callback(cached.booths); return; }
+            if (cached && cached.loading) { cached.callbacks.push(callback); return; }
+
+            const electorateId = getElectorateIdByName(electorateName);
+            if (!electorateId) { callback([]); return; }
+
+            ppbCache[electorateName] = { booths: [], loading: true, callbacks: [callback] };
+
+            const cmd = JSON.stringify({ requests: { electorateroster: [String(electorateId)] } });
+            const url = '/agc/ajax?commands=' + encodeURIComponent(cmd);
+
+            pageWindow.fetch(url, { credentials: 'same-origin' })
+                .then(r => r.json())
+                .then(data => {
+                    const booths = extractPpbBooths(data);
+                    const entry = ppbCache[electorateName];
+                    entry.booths = booths;
+                    entry.loading = false;
+                    const cbs = entry.callbacks;
+                    entry.callbacks = [];
+                    cbs.forEach(cb => cb(booths));
+                })
+                .catch(() => {
+                    const entry = ppbCache[electorateName];
+                    entry.booths = [];
+                    entry.loading = false;
+                    const cbs = entry.callbacks;
+                    entry.callbacks = [];
+                    cbs.forEach(cb => cb([]));
+                });
+        }
 
         function injectElectorateDropdown() {
             const h2 = document.querySelector('h2.ng-binding');
