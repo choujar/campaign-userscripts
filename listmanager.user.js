@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         List Manager Tweaks
 // @namespace    https://github.com/choujar/campaign-userscripts
-// @version      1.29.0
+// @version      1.29.1
 // @description  UX improvements for List Manager and Rocket
 // @author       Sahil Choujar
 // @match        https://listmanager.greens.org.au/*
@@ -1790,22 +1790,34 @@ The election has now been called! We need people to hand out 'How to Vote' cards
             }
             .gus-ppb-select {
                 flex: 1;
-                padding: 4px 8px;
-                border: 1px solid #ccc;
-                border-radius: 4px;
-                font-size: 13px;
+                padding: 7px 10px;
+                border: 2px solid #2e7d32;
+                border-radius: 6px;
+                font-size: 14px;
+                font-weight: 500;
                 font-family: inherit;
-                background: #fff;
+                background: #f1f8e9;
+                color: #1b5e20;
                 cursor: pointer;
+                appearance: none;
+                -webkit-appearance: none;
+                background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%232e7d32' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+                background-repeat: no-repeat;
+                background-position: right 10px center;
+                padding-right: 30px;
             }
             .gus-ppb-select:focus {
                 outline: none;
-                border-color: #2e7d32;
+                border-color: #1b5e20;
+                box-shadow: 0 0 0 2px rgba(46,125,50,0.2);
+            }
+            .gus-ppb-select:hover {
+                background: #e8f5e9;
             }
             .gus-ppb-single {
-                font-size: 13px;
+                font-size: 14px;
                 color: #2e7d32;
-                font-weight: 500;
+                font-weight: 600;
             }
             .gus-ppb-loading {
                 font-size: 12px;
@@ -2318,6 +2330,7 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                 updateElectorateDisplay(electorate);
                 electorateReadyCallbacks.forEach(cb => cb(electorate));
                 electorateReadyCallbacks = [];
+                if (electorate) fetchPpbBooths(electorate, () => {});
             });
         }
 
