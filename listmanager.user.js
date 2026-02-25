@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         List Manager Tweaks
 // @namespace    https://github.com/choujar/campaign-userscripts
-// @version      1.29.2
+// @version      1.29.3
 // @description  UX improvements for List Manager and Rocket
 // @author       Sahil Choujar
 // @match        https://listmanager.greens.org.au/*
@@ -952,7 +952,7 @@ The election has now been called! We need people to hand out 'How to Vote' cards
             return JSON.stringify({
                 op: 'intersection',
                 nodes: [
-                    { op: 'filter', filter: { name: 'roster', value: { electionId: 182, electorateIds: [electorateId], rosterTypes: ['Rostered'], shiftStatus: 'Confirmed', votingPeriod: 'Polling Day' } } }
+                    { op: 'filter', filter: { name: 'roster', value: { electionId: 182, electorateIds: [electorateId], rosterTypes: ['Rostered', 'Self-rostered'], shiftStatus: 'Any', votingPeriod: 'Any' } } }
                 ],
                 printTime: false,
                 useAdvancedSearchII: false
@@ -1161,8 +1161,8 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                     <div class="gus-breakdown-status">Loading 0 / ${ALL_ELECTORATES.length}...</div>
                     <div class="gus-breakdown-list"></div>
                     <div style="font-size:11px;color:#999;margin-top:12px;line-height:1.4;">
-                        Note: Some polling booths span multiple electorates, so volunteers at border booths
-                        appear in both counts. The total (${((rosterTotal ?? 0) + (rosterSelfRostered ?? 0) + (rosterEarlyVoting ?? 0)).toLocaleString()}) reflects confirmed + self-rostered + early voting volunteers.
+                        Note: Electorate counts include all rostered and self-rostered volunteers (any shift status, any voting period).
+                        Some polling booths span multiple electorates, so volunteers at border booths may appear in multiple counts.
                     </div>
                 </div>
             `;
