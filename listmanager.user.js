@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         List Manager Tweaks
 // @namespace    https://github.com/choujar/campaign-userscripts
-// @version      1.31.5
+// @version      1.31.6
 // @description  UX improvements for List Manager and Rocket
 // @author       Sahil Choujar
 // @match        https://listmanager.greens.org.au/*
@@ -676,6 +676,7 @@ The election has now been called! We need people to hand out 'How to Vote' cards
             .gus-bc-slot-partial { background: #fff3e0; color: #e65100; }
             .gus-bc-slot-empty { background: #ffebee; color: #c62828; }
             .gus-bc-slot-none { color: #ccc; }
+            .gus-bc-slot-unknown { background: #e3f2fd; color: #1565c0; }
             .gus-bc-pct { font-weight: 600; min-width: 40px; }
             .gus-bc-pct-good { color: #2e7d32; }
             .gus-bc-pct-warn { color: #e65100; }
@@ -1623,7 +1624,8 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                 .map(b => {
                     const info = b.info;
                     const pr = info.people_required;
-                    const need = (pr !== null && pr !== undefined && pr !== '') ? parseInt(pr) : 1;
+                    const needKnown = pr !== null && pr !== undefined && pr !== '';
+                    const need = needKnown ? parseInt(pr) : -1;
                     const slotCoverage = BOOTH_TIME_SLOTS.map(slotDef => {
                         const covering = (b.slots || []).filter(vol => {
                             const vs = parseInt(vol.time_start);
@@ -1657,17 +1659,20 @@ The election has now been called! We need people to hand out 'How to Vote' cards
         function computeElectorateSummary(booths) {
             const totalBooths = booths.length;
             const slotSummaries = BOOTH_TIME_SLOTS.map((_, si) => {
-                let totalHave = 0, totalNeed = 0;
+                let totalHave = 0, totalNeed = 0, allHave = 0;
                 for (const b of booths) {
+                    allHave += b.slotCoverage[si].have;
+                    if (b.slotCoverage[si].need < 0) continue;
                     totalHave += b.slotCoverage[si].have;
                     totalNeed += b.slotCoverage[si].need;
                 }
-                return { totalHave, totalNeed, pct: totalNeed > 0 ? Math.round((totalHave / totalNeed) * 100) : 0 };
+                return { totalHave, totalNeed, allHave, pct: totalNeed > 0 ? Math.round((totalHave / totalNeed) * 100) : 0 };
             });
             const grandHave = slotSummaries.reduce((s, v) => s + v.totalHave, 0);
             const grandNeed = slotSummaries.reduce((s, v) => s + v.totalNeed, 0);
             const overallPct = grandNeed > 0 ? Math.round((grandHave / grandNeed) * 100) : 0;
-            return { totalBooths, slotSummaries, overallPct };
+            const hasAnyKnownNeed = grandNeed > 0;
+            return { totalBooths, slotSummaries, overallPct, hasAnyKnownNeed };
         }
 
         function bcSlotClass(have, need) {
@@ -1762,11 +1767,20 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                 html += `<td>${s.totalBooths}</td>`;
                 for (let si = 0; si < BOOTH_TIME_SLOTS.length; si++) {
                     const ss = s.slotSummaries[si];
-                    const cls = bcSlotClass(ss.totalHave, ss.totalNeed);
-                    const label = ss.totalNeed === 0 ? '\u00b7' : `${ss.totalHave}/${ss.totalNeed}`;
-                    html += `<td><span class="gus-bc-slot ${cls}">${label}</span></td>`;
+                    if (ss.totalNeed > 0) {
+                        const cls = bcSlotClass(ss.totalHave, ss.totalNeed);
+                        html += `<td><span class="gus-bc-slot ${cls}">${ss.totalHave}/${ss.totalNeed}</span></td>`;
+                    } else if (ss.allHave > 0) {
+                        html += `<td><span class="gus-bc-slot gus-bc-slot-unknown">${ss.allHave}</span></td>`;
+                    } else {
+                        html += `<td><span class="gus-bc-slot gus-bc-slot-none">\u00b7</span></td>`;
+                    }
                 }
-                html += `<td class="gus-bc-pct ${bcPctClass(s.overallPct)}">${s.overallPct}%</td>`;
+                if (s.hasAnyKnownNeed) {
+                    html += `<td class="gus-bc-pct ${bcPctClass(s.overallPct)}">${s.overallPct}%</td>`;
+                } else {
+                    html += `<td class="gus-bc-pct">\u2014</td>`;
+                }
                 html += '</tr>';
             }
             html += '</tbody>';
@@ -1808,17 +1822,30 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                         tr.className = 'gus-bc-booth-row';
                         tr.dataset.parent = eid;
                         let cells = `<td><span class="gus-bc-priority">${PRIORITY_STARS[booth.priority] || '\u2605'}</span>${escapeHtml(booth.name)}</td>`;
-                        cells += `<td style="font-size:10px;color:#999;" title="${escapeHtml(booth.premises || '')}">${booth.peopleRequired}</td>`;
+                        cells += `<td style="font-size:10px;color:#999;" title="${escapeHtml(booth.premises || '')}">${booth.peopleRequired < 0 ? '\u2014' : booth.peopleRequired}</td>`;
+                        const isUnknownNeed = booth.peopleRequired < 0;
                         for (let si = 0; si < BOOTH_TIME_SLOTS.length; si++) {
                             const sc = booth.slotCoverage[si];
-                            const cls = bcSlotClass(sc.have, sc.need);
-                            const label = sc.need === 0 ? '\u00b7' : `${sc.have}/${sc.need}`;
-                            cells += `<td><span class="gus-bc-slot ${cls}" data-si="${si}" data-bid="${booth.id}">${label}</span></td>`;
+                            if (isUnknownNeed) {
+                                const label = sc.have === 0 ? '\u00b7' : String(sc.have);
+                                const cls = sc.have > 0 ? 'gus-bc-slot-unknown' : 'gus-bc-slot-none';
+                                cells += `<td><span class="gus-bc-slot ${cls}" data-si="${si}" data-bid="${booth.id}">${label}</span></td>`;
+                            } else {
+                                const cls = bcSlotClass(sc.have, sc.need);
+                                const label = sc.need === 0 ? '\u00b7' : `${sc.have}/${sc.need}`;
+                                cells += `<td><span class="gus-bc-slot ${cls}" data-si="${si}" data-bid="${booth.id}">${label}</span></td>`;
+                            }
                         }
-                        const boothPct = booth.peopleRequired > 0
-                            ? Math.round(booth.slotCoverage.reduce((s, c) => s + Math.min(c.have, c.need), 0) / (booth.peopleRequired * BOOTH_TIME_SLOTS.length) * 100)
-                            : 0;
-                        cells += `<td class="gus-bc-pct ${bcPctClass(boothPct)}">${boothPct}%</td>`;
+                        let boothPctLabel;
+                        if (isUnknownNeed) {
+                            boothPctLabel = '\u2014';
+                        } else {
+                            const boothPct = booth.peopleRequired > 0
+                                ? Math.round(booth.slotCoverage.reduce((s, c) => s + Math.min(c.have, c.need), 0) / (booth.peopleRequired * BOOTH_TIME_SLOTS.length) * 100)
+                                : 0;
+                            boothPctLabel = `<span class="${bcPctClass(boothPct)}">${boothPct}%</span>`;
+                        }
+                        cells += `<td class="gus-bc-pct">${boothPctLabel}</td>`;
                         tr.innerHTML = cells;
 
                         tr.querySelectorAll('.gus-bc-slot[data-bid]').forEach(span => {
