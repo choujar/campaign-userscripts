@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         List Manager Tweaks
 // @namespace    https://github.com/choujar/campaign-userscripts
-// @version      1.30.1
+// @version      1.30.2
 // @description  UX improvements for List Manager and Rocket
 // @author       Sahil Choujar
 // @match        https://listmanager.greens.org.au/*
@@ -385,7 +385,8 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                 display: flex;
                 flex-direction: column;
                 align-items: center;
-                gap: 8px;
+                gap: 4px;
+                text-align: center;
             }
             .gus-roster-title {
                 font-size: 14px;
@@ -395,8 +396,8 @@ The election has now been called! We need people to hand out 'How to Vote' cards
             }
             .gus-roster-ring {
                 position: relative;
-                width: 100px;
-                height: 100px;
+                width: 80px;
+                height: 80px;
                 margin: 0 auto;
             }
             .gus-roster-ring svg {
@@ -420,16 +421,18 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                 top: 50%;
                 left: 50%;
                 transform: translate(-50%, -50%);
-                font-size: 18px;
+                font-size: 15px;
                 font-weight: 600;
                 color: #333;
             }
             .gus-roster-count {
-                font-size: 13px;
+                font-size: 12px;
                 color: #666;
-                display: block;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                gap: 1px;
                 width: 100%;
-                text-align: center;
             }
             .gus-roster-count strong {
                 color: #333;
@@ -1248,9 +1251,10 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                                 </svg>
                                 <span class="gus-roster-pct gus-total-pct">0%</span>
                             </div>
-                            <div class="gus-breakdown-ring-label" style="text-align:left;line-height:1.6;">
-                                <div><span style="color:${EV_COLOR};font-weight:600;">EV:</span> <strong>${((evConfirmed ?? 0) + (evSelfRostered ?? 0)).toLocaleString()}</strong> <span style="color:${HEYSEN_COLOR};">(Heysen ${(evHeysen ?? 0).toLocaleString()})</span> <span style="color:#999;">(self ${(evSelfRostered ?? 0).toLocaleString()})</span> <span style="color:${CAPTAIN_COLOR};">(capt ${(evCaptains ?? 0).toLocaleString()})</span> / ${EV_TARGET.toLocaleString()}</div>
-                                <div><span style="color:${PD_COLOR};font-weight:600;">PD:</span> <strong>${((pdConfirmed ?? 0) + (pdSelfRostered ?? 0)).toLocaleString()}</strong> <span style="color:${HEYSEN_COLOR};">(Heysen ${(pdHeysen ?? 0).toLocaleString()})</span> <span style="color:#999;">(self ${(pdSelfRostered ?? 0).toLocaleString()})</span> <span style="color:${CAPTAIN_COLOR};">(capt ${(pdCaptains ?? 0).toLocaleString()})</span> / ${PD_TARGET.toLocaleString()}</div>
+                            <div class="gus-breakdown-ring-label" style="text-align:center;line-height:1.6;">
+                                <div><span style="color:${EV_COLOR};font-weight:600;">EV:</span> <strong>${((evConfirmed ?? 0) + (evSelfRostered ?? 0)).toLocaleString()}</strong> <span style="color:${HEYSEN_COLOR};">(${(evHeysen ?? 0).toLocaleString()})</span> <span style="color:#999;">(${(evSelfRostered ?? 0).toLocaleString()})</span> <span style="color:${CAPTAIN_COLOR};">(${(evCaptains ?? 0).toLocaleString()})</span> / ${EV_TARGET.toLocaleString()}</div>
+                                <div><span style="color:${PD_COLOR};font-weight:600;">PD:</span> <strong>${((pdConfirmed ?? 0) + (pdSelfRostered ?? 0)).toLocaleString()}</strong> <span style="color:${HEYSEN_COLOR};">(${(pdHeysen ?? 0).toLocaleString()})</span> <span style="color:#999;">(${(pdSelfRostered ?? 0).toLocaleString()})</span> <span style="color:${CAPTAIN_COLOR};">(${(pdCaptains ?? 0).toLocaleString()})</span> / ${PD_TARGET.toLocaleString()}</div>
+                                <div style="font-size:11px;color:#888;margin-top:2px;"><span class="gus-dot" style="background:${HEYSEN_COLOR};display:inline-block;width:7px;height:7px;border-radius:50%;"></span> Heysen &nbsp;<span style="color:#999;">Self</span> &nbsp;<span class="gus-dot" style="background:${CAPTAIN_COLOR};display:inline-block;width:7px;height:7px;border-radius:50%;"></span> Capt</div>
                             </div>
                         </div>
                     </div>
@@ -1445,20 +1449,9 @@ The election has now been called! We need people to hand out 'How to Vote' cards
             if (!body) return;
 
             if (rosterLoading) {
-                const labels = [
-                    ['PD confirmed', pdConfirmed],
-                    ['PD self', pdSelfRostered],
-                    ['PD Heysen', pdHeysen],
-                    ['PD captains', pdCaptains],
-                    ['EV confirmed', evConfirmed],
-                    ['EV self', evSelfRostered],
-                    ['EV Heysen', evHeysen],
-                    ['EV captains', evCaptains]
-                ];
-                const lines = labels.map(([name, val]) =>
-                    val !== null ? `<div style="color:#4caf50;">✓ ${escapeHtml(name)}</div>` : `<div style="color:#999;">${escapeHtml(name)}...</div>`
-                ).join('');
-                body.innerHTML = `<span class="gus-roster-loading"><span class="gus-spinner"></span><div style="display:flex;flex-direction:column;gap:1px;font-size:12px;">${lines}</div></span>`;
+                const all = [pdConfirmed, pdSelfRostered, pdHeysen, pdCaptains, evConfirmed, evSelfRostered, evHeysen, evCaptains];
+                const done = all.filter(v => v !== null).length;
+                body.innerHTML = `<span class="gus-roster-loading" style="display:flex;align-items:center;gap:8px;"><span class="gus-spinner"></span><span style="font-size:12px;color:#999;">Loading ${done}/8</span></span>`;
                 return;
             }
             if (rosterError) {
@@ -1469,6 +1462,7 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                 const pdTotal = (pdConfirmed ?? 0) + (pdSelfRostered ?? 0);
                 const evTotal = (evConfirmed ?? 0) + (evSelfRostered ?? 0);
                 const grandTotal = pdTotal + evTotal;
+                const totalPct = Math.round(Math.min((grandTotal / TOTAL_TARGET) * 100, 100));
                 const pdPct = Math.min((pdTotal / TOTAL_TARGET) * 100, 100);
                 const evPct = Math.min((evTotal / TOTAL_TARGET) * 100, Math.max(100 - pdPct, 0));
 
@@ -1480,12 +1474,15 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                 body.innerHTML = `
                     ${buildRingHtml(segments, grandTotal.toLocaleString())}
                     <div class="gus-roster-count">
-                        <div><span style="color:${EV_COLOR};font-weight:600;">EV:</span> <strong>${evTotal.toLocaleString()}</strong> <span style="color:${HEYSEN_COLOR};">(Heysen ${(evHeysen ?? 0).toLocaleString()})</span> <span style="color:#999;">(self ${(evSelfRostered ?? 0).toLocaleString()})</span> <span style="color:${CAPTAIN_COLOR};">(capt ${(evCaptains ?? 0).toLocaleString()})</span> / ${EV_TARGET.toLocaleString()}</div>
-                        <div><span style="color:${PD_COLOR};font-weight:600;">PD:</span> <strong>${pdTotal.toLocaleString()}</strong> <span style="color:${HEYSEN_COLOR};">(Heysen ${(pdHeysen ?? 0).toLocaleString()})</span> <span style="color:#999;">(self ${(pdSelfRostered ?? 0).toLocaleString()})</span> <span style="color:${CAPTAIN_COLOR};">(capt ${(pdCaptains ?? 0).toLocaleString()})</span> / ${PD_TARGET.toLocaleString()}</div>
+                        <div><span style="color:${EV_COLOR};font-weight:600;">EV:</span> <strong>${evTotal.toLocaleString()}</strong> <span style="color:${HEYSEN_COLOR};">(${(evHeysen ?? 0).toLocaleString()})</span> <span style="color:#999;">(${(evSelfRostered ?? 0).toLocaleString()})</span> <span style="color:${CAPTAIN_COLOR};">(${(evCaptains ?? 0).toLocaleString()})</span> / ${EV_TARGET.toLocaleString()}</div>
+                        <div><span style="color:${PD_COLOR};font-weight:600;">PD:</span> <strong>${pdTotal.toLocaleString()}</strong> <span style="color:${HEYSEN_COLOR};">(${(pdHeysen ?? 0).toLocaleString()})</span> <span style="color:#999;">(${(pdSelfRostered ?? 0).toLocaleString()})</span> <span style="color:${CAPTAIN_COLOR};">(${(pdCaptains ?? 0).toLocaleString()})</span> / ${PD_TARGET.toLocaleString()}</div>
                     </div>
                     <div class="gus-roster-legend">
-                        <span><span class="gus-dot" style="background:${PD_COLOR};"></span>Polling day</span>
-                        <span><span class="gus-dot" style="background:${EV_COLOR};"></span>Early voting</span>
+                        <span><span class="gus-dot" style="background:${PD_COLOR};"></span>PD</span>
+                        <span><span class="gus-dot" style="background:${EV_COLOR};"></span>EV</span>
+                        <span><span class="gus-dot" style="background:${HEYSEN_COLOR};"></span>Heysen</span>
+                        <span style="color:#999;">Self</span>
+                        <span><span class="gus-dot" style="background:${CAPTAIN_COLOR};"></span>Capt</span>
                     </div>
                 `;
                 attachRingHover(widget);
@@ -1494,6 +1491,14 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                 if (ring && !ring.dataset.gusClick) {
                     ring.dataset.gusClick = '1';
                     ring.addEventListener('click', () => openBreakdownPopup());
+                }
+
+                // Show percentage on ring hover, revert on leave
+                if (ring && !ring.dataset.gusRingHover) {
+                    ring.dataset.gusRingHover = '1';
+                    const pctEl = ring.querySelector('.gus-roster-pct');
+                    ring.addEventListener('mouseenter', () => { pctEl.textContent = totalPct + '%'; });
+                    ring.addEventListener('mouseleave', () => { pctEl.textContent = grandTotal.toLocaleString(); });
                 }
             }
         }
