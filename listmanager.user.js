@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         List Manager Tweaks
 // @namespace    https://github.com/choujar/campaign-userscripts
-// @version      1.31.4
+// @version      1.31.5
 // @description  UX improvements for List Manager and Rocket
 // @author       Sahil Choujar
 // @match        https://listmanager.greens.org.au/*
@@ -676,7 +676,6 @@ The election has now been called! We need people to hand out 'How to Vote' cards
             .gus-bc-slot-partial { background: #fff3e0; color: #e65100; }
             .gus-bc-slot-empty { background: #ffebee; color: #c62828; }
             .gus-bc-slot-none { color: #ccc; }
-            .gus-bc-slot-notarget { background: #e3f2fd; color: #1565c0; }
             .gus-bc-pct { font-weight: 600; min-width: 40px; }
             .gus-bc-pct-good { color: #2e7d32; }
             .gus-bc-pct-warn { color: #e65100; }
@@ -1623,6 +1622,8 @@ The election has now been called! We need people to hand out 'How to Vote' cards
             return edBooths
                 .map(b => {
                     const info = b.info;
+                    const pr = info.people_required;
+                    const need = (pr !== null && pr !== undefined && pr !== '') ? parseInt(pr) : 1;
                     const slotCoverage = BOOTH_TIME_SLOTS.map(slotDef => {
                         const covering = (b.slots || []).filter(vol => {
                             const vs = parseInt(vol.time_start);
@@ -1635,7 +1636,7 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                         }));
                         return {
                             have: covering.length,
-                            need: parseInt(info.people_required) || 0,
+                            need: need,
                             volunteers: covering
                         };
                     });
@@ -1644,7 +1645,7 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                         name: info.name,
                         premises: info.premises,
                         priority: parseInt(info.priority) || 1,
-                        peopleRequired: parseInt(info.people_required) || 0,
+                        peopleRequired: need,
                         estTotal: parseInt(info.est_total) || 0,
                         estGreen: parseInt(info.est_green) || 0,
                         isShared: info.isshared === '1',
@@ -1656,26 +1657,21 @@ The election has now been called! We need people to hand out 'How to Vote' cards
         function computeElectorateSummary(booths) {
             const totalBooths = booths.length;
             const slotSummaries = BOOTH_TIME_SLOTS.map((_, si) => {
-                let totalHave = 0, totalNeed = 0, targetedHave = 0;
+                let totalHave = 0, totalNeed = 0;
                 for (const b of booths) {
                     totalHave += b.slotCoverage[si].have;
                     totalNeed += b.slotCoverage[si].need;
-                    if (b.slotCoverage[si].need > 0) {
-                        targetedHave += b.slotCoverage[si].have;
-                    }
                 }
-                return { totalHave, totalNeed, targetedHave, pct: totalNeed > 0 ? Math.round((targetedHave / totalNeed) * 100) : 0 };
+                return { totalHave, totalNeed, pct: totalNeed > 0 ? Math.round((totalHave / totalNeed) * 100) : 0 };
             });
             const grandHave = slotSummaries.reduce((s, v) => s + v.totalHave, 0);
-            const grandTargetedHave = slotSummaries.reduce((s, v) => s + v.targetedHave, 0);
             const grandNeed = slotSummaries.reduce((s, v) => s + v.totalNeed, 0);
-            const overallPct = grandNeed > 0 ? Math.round((grandTargetedHave / grandNeed) * 100) : (grandHave > 0 ? 100 : 0);
-            return { totalBooths, slotSummaries, overallPct, grandHave };
+            const overallPct = grandNeed > 0 ? Math.round((grandHave / grandNeed) * 100) : 0;
+            return { totalBooths, slotSummaries, overallPct };
         }
 
         function bcSlotClass(have, need) {
-            if (have === 0 && need === 0) return 'gus-bc-slot-none';
-            if (need === 0 && have > 0) return 'gus-bc-slot-notarget';
+            if (need === 0) return 'gus-bc-slot-none';
             if (have >= need) return 'gus-bc-slot-full';
             if (have > 0) return 'gus-bc-slot-partial';
             return 'gus-bc-slot-empty';
@@ -1735,20 +1731,18 @@ The election has now been called! We need people to hand out 'How to Vote' cards
         function renderCoverageTable(results, tableEl, statusEl) {
             const sorted = bcSortResults(results);
 
-            let grandBooths = 0, grandHave = 0, grandTargetedHave = 0, grandNeed = 0;
+            let grandBooths = 0, grandHave = 0, grandNeed = 0;
             for (const r of results) {
                 grandBooths += r.summary.totalBooths;
                 for (const ss of r.summary.slotSummaries) {
                     grandHave += ss.totalHave;
-                    grandTargetedHave += ss.targetedHave;
                     grandNeed += ss.totalNeed;
                 }
             }
-            const grandPct = grandNeed > 0 ? Math.round((grandTargetedHave / grandNeed) * 100) : 0;
+            const grandPct = grandNeed > 0 ? Math.round((grandHave / grandNeed) * 100) : 0;
 
             if (statusEl) {
-                const volText = grandHave > 0 ? ` \u00b7 ${grandHave} volunteer-slots filled` : '';
-                statusEl.innerHTML = `${results.length} electorates \u00b7 ${grandBooths} booths \u00b7 <span class="${bcPctClass(grandPct)}">${grandPct}% targeted coverage</span>${volText}`;
+                statusEl.innerHTML = `${results.length} electorates \u00b7 ${grandBooths} booths \u00b7 <span class="${bcPctClass(grandPct)}">${grandPct}% coverage</span>`;
             }
 
             const arrow = (col) => bcSortCol === col ? (bcSortAsc ? ' \u25B2' : ' \u25BC') : '';
@@ -1768,11 +1762,8 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                 html += `<td>${s.totalBooths}</td>`;
                 for (let si = 0; si < BOOTH_TIME_SLOTS.length; si++) {
                     const ss = s.slotSummaries[si];
-                    const cls = ss.totalNeed > 0 ? bcSlotClass(ss.targetedHave, ss.totalNeed) : bcSlotClass(ss.totalHave, 0);
-                    let label;
-                    if (ss.totalHave === 0 && ss.totalNeed === 0) label = '\u00b7';
-                    else if (ss.totalNeed === 0) label = String(ss.totalHave);
-                    else label = `${ss.targetedHave}/${ss.totalNeed}`;
+                    const cls = bcSlotClass(ss.totalHave, ss.totalNeed);
+                    const label = ss.totalNeed === 0 ? '\u00b7' : `${ss.totalHave}/${ss.totalNeed}`;
                     html += `<td><span class="gus-bc-slot ${cls}">${label}</span></td>`;
                 }
                 html += `<td class="gus-bc-pct ${bcPctClass(s.overallPct)}">${s.overallPct}%</td>`;
@@ -1821,25 +1812,13 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                         for (let si = 0; si < BOOTH_TIME_SLOTS.length; si++) {
                             const sc = booth.slotCoverage[si];
                             const cls = bcSlotClass(sc.have, sc.need);
-                            let label;
-                            if (sc.have === 0 && sc.need === 0) label = '\u00b7';
-                            else if (sc.need === 0) label = String(sc.have);
-                            else label = `${sc.have}/${sc.need}`;
+                            const label = sc.need === 0 ? '\u00b7' : `${sc.have}/${sc.need}`;
                             cells += `<td><span class="gus-bc-slot ${cls}" data-si="${si}" data-bid="${booth.id}">${label}</span></td>`;
                         }
-                        const totalHave = booth.slotCoverage.reduce((s, c) => s + c.have, 0);
-                        let boothPct, boothPctLabel;
-                        if (booth.peopleRequired > 0) {
-                            boothPct = Math.round(booth.slotCoverage.reduce((s, c) => s + Math.min(c.have, c.need), 0) / (booth.peopleRequired * BOOTH_TIME_SLOTS.length) * 100);
-                            boothPctLabel = boothPct + '%';
-                        } else if (totalHave > 0) {
-                            boothPct = 100;
-                            boothPctLabel = '\u2714';
-                        } else {
-                            boothPct = 0;
-                            boothPctLabel = '\u2014';
-                        }
-                        cells += `<td class="gus-bc-pct ${bcPctClass(boothPct)}">${boothPctLabel}</td>`;
+                        const boothPct = booth.peopleRequired > 0
+                            ? Math.round(booth.slotCoverage.reduce((s, c) => s + Math.min(c.have, c.need), 0) / (booth.peopleRequired * BOOTH_TIME_SLOTS.length) * 100)
+                            : 0;
+                        cells += `<td class="gus-bc-pct ${bcPctClass(boothPct)}">${boothPct}%</td>`;
                         tr.innerHTML = cells;
 
                         tr.querySelectorAll('.gus-bc-slot[data-bid]').forEach(span => {
