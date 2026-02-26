@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         List Manager Tweaks
 // @namespace    https://github.com/choujar/campaign-userscripts
-// @version      1.30.4
+// @version      1.30.5
 // @description  UX improvements for List Manager and Rocket
 // @author       Sahil Choujar
 // @match        https://listmanager.greens.org.au/*
@@ -1473,8 +1473,6 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                         <div><span style="color:${PD_COLOR};font-weight:600;">PD:</span> <strong>${pdTotal.toLocaleString()}</strong> <span style="color:${HEYSEN_COLOR};">(${(pdHeysen ?? 0).toLocaleString()})</span> <span style="color:#999;">(${(pdSelfRostered ?? 0).toLocaleString()})</span> <span style="color:${CAPTAIN_COLOR};">(${(pdCaptains ?? 0).toLocaleString()})</span> / ${PD_TARGET.toLocaleString()}</div>
                     </div>
                     <div class="gus-roster-legend">
-                        <span><span class="gus-dot" style="background:${PD_COLOR};"></span>PD</span>
-                        <span><span class="gus-dot" style="background:${EV_COLOR};"></span>EV</span>
                         <span><span class="gus-dot" style="background:${HEYSEN_COLOR};"></span>Heysen</span>
                         <span><span class="gus-dot" style="background:#999;"></span>Self</span>
                         <span><span class="gus-dot" style="background:${CAPTAIN_COLOR};"></span>Capt</span>
