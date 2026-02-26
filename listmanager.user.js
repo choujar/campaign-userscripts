@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         List Manager Tweaks
 // @namespace    https://github.com/choujar/campaign-userscripts
-// @version      1.30.5
+// @version      1.31.0
 // @description  UX improvements for List Manager and Rocket
 // @author       Sahil Choujar
 // @match        https://listmanager.greens.org.au/*
@@ -14,6 +14,7 @@
 // @connect      api.listmanager.greens.org.au
 // @connect      nominatim.openstreetmap.org
 // @connect      www.ecsa.sa.gov.au
+// @connect      contact-sa.greens.org.au
 // @updateURL    https://raw.githubusercontent.com/choujar/campaign-userscripts/main/listmanager.user.js
 // @downloadURL  https://raw.githubusercontent.com/choujar/campaign-userscripts/main/listmanager.user.js
 // ==/UserScript==
@@ -592,6 +593,134 @@ The election has now been called! We need people to hand out 'How to Vote' cards
             }
         `);
 
+        GM_addStyle(`
+            .gus-bc-popup {
+                background: #fff;
+                border-radius: 12px;
+                padding: 20px 24px;
+                width: 960px;
+                max-width: 95vw;
+                max-height: 90vh;
+                overflow-y: auto;
+                box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+            }
+            .gus-bc-header {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                margin-bottom: 12px;
+            }
+            .gus-bc-title { font-size: 16px; font-weight: 600; }
+            .gus-bc-summary { font-size: 12px; color: #666; margin-bottom: 12px; }
+            .gus-bc-close {
+                font-size: 22px;
+                cursor: pointer;
+                color: #999;
+                line-height: 1;
+            }
+            .gus-bc-close:hover { color: #333; }
+            .gus-bc-table {
+                width: 100%;
+                border-collapse: collapse;
+                font-size: 12px;
+            }
+            .gus-bc-table th {
+                padding: 6px 8px;
+                text-align: center;
+                font-size: 11px;
+                font-weight: 600;
+                color: #666;
+                border-bottom: 2px solid #e0e0e0;
+                white-space: nowrap;
+                position: sticky;
+                top: 0;
+                background: #fff;
+                z-index: 1;
+            }
+            .gus-bc-table th:first-child { text-align: left; min-width: 140px; }
+            .gus-bc-row { cursor: pointer; transition: background 0.1s; }
+            .gus-bc-row:hover { background: #f5f5f5; }
+            .gus-bc-row td {
+                padding: 5px 8px;
+                border-bottom: 1px solid #eee;
+                text-align: center;
+                white-space: nowrap;
+            }
+            .gus-bc-row td:first-child { text-align: left; font-weight: 500; color: #333; }
+            .gus-bc-expand-icon {
+                display: inline-block;
+                width: 16px;
+                font-size: 10px;
+                color: #999;
+                transition: transform 0.15s;
+            }
+            .gus-bc-row-expanded .gus-bc-expand-icon { transform: rotate(90deg); }
+            .gus-bc-slot {
+                display: inline-block;
+                min-width: 36px;
+                padding: 2px 6px;
+                border-radius: 4px;
+                font-size: 11px;
+                font-weight: 600;
+                text-align: center;
+            }
+            .gus-bc-slot-full { background: #e8f5e9; color: #2e7d32; }
+            .gus-bc-slot-partial { background: #fff3e0; color: #e65100; }
+            .gus-bc-slot-empty { background: #ffebee; color: #c62828; }
+            .gus-bc-slot-none { color: #ccc; }
+            .gus-bc-pct { font-weight: 600; min-width: 40px; }
+            .gus-bc-pct-good { color: #2e7d32; }
+            .gus-bc-pct-warn { color: #e65100; }
+            .gus-bc-pct-bad { color: #c62828; }
+            .gus-bc-booth-row td {
+                padding: 3px 8px;
+                border-bottom: 1px solid #f0f0f0;
+                font-size: 11px;
+                color: #555;
+            }
+            .gus-bc-booth-row td:first-child { padding-left: 28px; }
+            .gus-bc-booth-row:hover { background: #fafafa; }
+            .gus-bc-priority { color: #f57c00; font-size: 10px; letter-spacing: -1px; margin-right: 4px; }
+            .gus-bc-tooltip {
+                position: fixed;
+                background: #333;
+                color: #fff;
+                padding: 6px 10px;
+                border-radius: 6px;
+                font-size: 11px;
+                line-height: 1.4;
+                z-index: 100001;
+                pointer-events: none;
+                max-width: 220px;
+                box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+            }
+            .gus-bc-btn {
+                background: none;
+                border: 1px solid #ccc;
+                border-radius: 4px;
+                cursor: pointer;
+                font-size: 11px;
+                padding: 2px 8px;
+                color: #666;
+                transition: background 0.15s, color 0.15s;
+            }
+            .gus-bc-btn:hover { background: #f0f0f0; color: #333; }
+            .gus-bc-auth-error {
+                text-align: center;
+                padding: 40px 20px;
+                color: #666;
+                font-size: 14px;
+                line-height: 1.6;
+            }
+            .gus-bc-auth-error a { color: #1565c0; text-decoration: underline; }
+            .gus-bc-status {
+                margin-top: 8px;
+                font-size: 12px;
+                color: #999;
+                text-align: center;
+            }
+        `);
+
         // --- Template manager styles ---
         GM_addStyle(`
             .gus-template-btn {
@@ -886,6 +1015,7 @@ The election has now been called! We need people to hand out 'How to Vote' cards
         const CAPTAIN_COLOR = '#e65100';
         let rosterLoading = false;
         let breakdownCache = null; // { results: [...], timestamp: Date.now() }
+        let boothCoverageCache = null; // { results: [...], timestamp: Date.now() }
         let rosterError = null;
 
         const ALL_ELECTORATES = [
@@ -906,6 +1036,15 @@ The election has now been called! We need people to hand out 'How to Vote' cards
             ['Torrens', 140552], ['Unley', 140553], ['Waite', 140554],
             ['West Torrens', 140555], ['Wright', 140556]
         ];
+
+        const BOOTH_TIME_SLOTS = [
+            { label: '8-10', start: 480, end: 600 },
+            { label: '10-12', start: 600, end: 720 },
+            { label: '12-2', start: 720, end: 840 },
+            { label: '2-4', start: 840, end: 960 },
+            { label: '4-6', start: 960, end: 1080 }
+        ];
+        const PRIORITY_STARS = { 3: '\u2605\u2605\u2605', 2: '\u2605\u2605', 1: '\u2605' };
 
         function getPrioritisedElectorates() {
             const saved = GM_getValue('electorateOrder', null);
@@ -1436,6 +1575,301 @@ The election has now been called! We need people to hand out 'How to Vote' cards
             }
         }
 
+        // --- Booth Coverage Dashboard ---
+
+        function fetchBoothRoster(electorateId, callback) {
+            const cmd = JSON.stringify({ requests: { electorateroster: [String(electorateId)] } });
+            const url = 'https://contact-sa.greens.org.au/agc/ajax?commands=' + encodeURIComponent(cmd);
+            GM_xmlhttpRequest({
+                method: 'GET',
+                url: url,
+                onload: function(response) {
+                    if (response.status >= 300) {
+                        callback(null, 'not_logged_in');
+                        return;
+                    }
+                    try {
+                        const data = JSON.parse(response.responseText);
+                        if (data.is_error) {
+                            callback(null, 'api_error');
+                            return;
+                        }
+                        callback(data.commands, null);
+                    } catch (e) {
+                        callback(null, 'not_logged_in');
+                    }
+                },
+                onerror: function() {
+                    callback(null, 'network_error');
+                }
+            });
+        }
+
+        function parseElectionDayBooths(commands) {
+            if (!commands || !commands.booths) return [];
+            return commands.booths
+                .filter(b => b.info && b.info.prepoll === '0')
+                .map(b => {
+                    const info = b.info;
+                    const slotCoverage = BOOTH_TIME_SLOTS.map(slotDef => {
+                        const covering = (b.slots || []).filter(vol => {
+                            const vs = parseInt(vol.time_start);
+                            const ve = parseInt(vol.time_end);
+                            return vs < slotDef.end && ve > slotDef.start;
+                        }).map(vol => ({
+                            name: vol.name,
+                            timeStart: parseInt(vol.time_start),
+                            timeEnd: parseInt(vol.time_end)
+                        }));
+                        return {
+                            have: covering.length,
+                            need: parseInt(info.people_required) || 0,
+                            volunteers: covering
+                        };
+                    });
+                    return {
+                        id: info.id,
+                        name: info.name,
+                        premises: info.premises,
+                        priority: parseInt(info.priority) || 1,
+                        peopleRequired: parseInt(info.people_required) || 0,
+                        estTotal: parseInt(info.est_total) || 0,
+                        estGreen: parseInt(info.est_green) || 0,
+                        isShared: info.isshared === '1',
+                        slotCoverage
+                    };
+                });
+        }
+
+        function computeElectorateSummary(booths) {
+            const totalBooths = booths.length;
+            const slotSummaries = BOOTH_TIME_SLOTS.map((_, si) => {
+                let totalHave = 0, totalNeed = 0;
+                for (const b of booths) {
+                    totalHave += b.slotCoverage[si].have;
+                    totalNeed += b.slotCoverage[si].need;
+                }
+                return { totalHave, totalNeed, pct: totalNeed > 0 ? Math.round((totalHave / totalNeed) * 100) : 100 };
+            });
+            const grandHave = slotSummaries.reduce((s, v) => s + v.totalHave, 0);
+            const grandNeed = slotSummaries.reduce((s, v) => s + v.totalNeed, 0);
+            const overallPct = grandNeed > 0 ? Math.round((grandHave / grandNeed) * 100) : 100;
+            return { totalBooths, slotSummaries, overallPct };
+        }
+
+        function bcSlotClass(have, need) {
+            if (need === 0) return 'gus-bc-slot-none';
+            if (have >= need) return 'gus-bc-slot-full';
+            if (have > 0) return 'gus-bc-slot-partial';
+            return 'gus-bc-slot-empty';
+        }
+
+        function bcPctClass(pct) {
+            if (pct >= 80) return 'gus-bc-pct-good';
+            if (pct >= 40) return 'gus-bc-pct-warn';
+            return 'gus-bc-pct-bad';
+        }
+
+        function minsToTime(mins) {
+            const h = Math.floor(mins / 60);
+            const m = mins % 60;
+            const period = h >= 12 ? 'pm' : 'am';
+            const hr = h === 0 ? 12 : h > 12 ? h - 12 : h;
+            return m === 0 ? `${hr}${period}` : `${hr}:${String(m).padStart(2, '0')}${period}`;
+        }
+
+        let bcTooltipEl = null;
+        function showBcTooltip(e, volunteers) {
+            hideBcTooltip();
+            if (!volunteers || volunteers.length === 0) return;
+            const tip = document.createElement('div');
+            tip.className = 'gus-bc-tooltip';
+            tip.innerHTML = volunteers.map(v =>
+                `${escapeHtml(v.name)} <span style="color:#aaa;">${minsToTime(v.timeStart)}\u2013${minsToTime(v.timeEnd)}</span>`
+            ).join('<br>');
+            document.body.appendChild(tip);
+            bcTooltipEl = tip;
+            const rect = e.target.getBoundingClientRect();
+            tip.style.left = Math.min(rect.left, window.innerWidth - 230) + 'px';
+            tip.style.top = (rect.bottom + 6) + 'px';
+        }
+
+        function hideBcTooltip() {
+            if (bcTooltipEl) { bcTooltipEl.remove(); bcTooltipEl = null; }
+        }
+
+        function renderCoverageTable(results, tableEl, statusEl) {
+            const sorted = [...results].sort((a, b) => a.summary.overallPct - b.summary.overallPct);
+
+            let grandBooths = 0, grandHave = 0, grandNeed = 0;
+            for (const r of results) {
+                grandBooths += r.summary.totalBooths;
+                for (const ss of r.summary.slotSummaries) {
+                    grandHave += ss.totalHave;
+                    grandNeed += ss.totalNeed;
+                }
+            }
+            const grandPct = grandNeed > 0 ? Math.round((grandHave / grandNeed) * 100) : 0;
+
+            if (statusEl) {
+                statusEl.innerHTML = `${results.length} electorates \u00b7 ${grandBooths} booths \u00b7 <span class="${bcPctClass(grandPct)}">${grandPct}% overall coverage</span>`;
+            }
+
+            let html = '<thead><tr><th>Electorate</th><th>Booths</th>';
+            for (const slot of BOOTH_TIME_SLOTS) html += `<th>${slot.label}</th>`;
+            html += '<th>%</th></tr></thead><tbody>';
+
+            for (const r of sorted) {
+                const s = r.summary;
+                html += `<tr class="gus-bc-row" data-eid="${r.id}">`;
+                html += `<td><span class="gus-bc-expand-icon">\u25B6</span> ${escapeHtml(r.name)}</td>`;
+                html += `<td>${s.totalBooths}</td>`;
+                for (let si = 0; si < BOOTH_TIME_SLOTS.length; si++) {
+                    const ss = s.slotSummaries[si];
+                    const cls = bcSlotClass(ss.totalHave, ss.totalNeed);
+                    const label = ss.totalNeed === 0 ? '\u00b7' : `${ss.totalHave}/${ss.totalNeed}`;
+                    html += `<td><span class="gus-bc-slot ${cls}">${label}</span></td>`;
+                }
+                html += `<td class="gus-bc-pct ${bcPctClass(s.overallPct)}">${s.overallPct}%</td>`;
+                html += '</tr>';
+            }
+            html += '</tbody>';
+            tableEl.innerHTML = html;
+
+            tableEl.querySelectorAll('.gus-bc-row').forEach(row => {
+                row.addEventListener('click', () => {
+                    const eid = row.dataset.eid;
+                    const existing = tableEl.querySelectorAll(`.gus-bc-booth-row[data-parent="${eid}"]`);
+                    if (existing.length > 0) {
+                        existing.forEach(el => el.remove());
+                        row.classList.remove('gus-bc-row-expanded');
+                        return;
+                    }
+                    row.classList.add('gus-bc-row-expanded');
+                    const electorate = sorted.find(r => String(r.id) === eid);
+                    if (!electorate) return;
+
+                    const booths = [...electorate.booths].sort((a, b) => {
+                        if (b.priority !== a.priority) return b.priority - a.priority;
+                        return a.name.localeCompare(b.name);
+                    });
+
+                    const frag = document.createDocumentFragment();
+                    for (const booth of booths) {
+                        const tr = document.createElement('tr');
+                        tr.className = 'gus-bc-booth-row';
+                        tr.dataset.parent = eid;
+                        let cells = `<td><span class="gus-bc-priority">${PRIORITY_STARS[booth.priority] || '\u2605'}</span>${escapeHtml(booth.name)}</td>`;
+                        cells += `<td style="font-size:10px;color:#999;" title="${escapeHtml(booth.premises || '')}">${booth.peopleRequired}</td>`;
+                        for (let si = 0; si < BOOTH_TIME_SLOTS.length; si++) {
+                            const sc = booth.slotCoverage[si];
+                            const cls = bcSlotClass(sc.have, sc.need);
+                            const label = sc.need === 0 ? '\u00b7' : sc.have === 0 ? '\u00b7' : `${sc.have}/${sc.need}`;
+                            cells += `<td><span class="gus-bc-slot ${cls}" data-si="${si}" data-bid="${booth.id}">${label}</span></td>`;
+                        }
+                        const boothPct = booth.peopleRequired > 0
+                            ? Math.round(booth.slotCoverage.reduce((s, c) => s + Math.min(c.have, c.need), 0) / (booth.peopleRequired * BOOTH_TIME_SLOTS.length) * 100)
+                            : 100;
+                        cells += `<td class="gus-bc-pct ${bcPctClass(boothPct)}">${boothPct}%</td>`;
+                        tr.innerHTML = cells;
+
+                        tr.querySelectorAll('.gus-bc-slot[data-bid]').forEach(span => {
+                            const si = parseInt(span.dataset.si);
+                            const bid = span.dataset.bid;
+                            const b = booths.find(x => x.id === bid);
+                            if (b) {
+                                span.addEventListener('mouseenter', (e) => showBcTooltip(e, b.slotCoverage[si].volunteers));
+                                span.addEventListener('mouseleave', hideBcTooltip);
+                            }
+                        });
+
+                        frag.appendChild(tr);
+                    }
+                    row.after(frag);
+                });
+            });
+        }
+
+        function openBoothCoverageModal() {
+            if (document.querySelector('.gus-bc-overlay')) return;
+
+            const overlay = document.createElement('div');
+            overlay.className = 'gus-breakdown-overlay gus-bc-overlay';
+            overlay.addEventListener('click', (e) => { if (e.target === overlay) { hideBcTooltip(); overlay.remove(); } });
+
+            const popup = document.createElement('div');
+            popup.className = 'gus-bc-popup';
+            popup.innerHTML = `
+                <div class="gus-bc-header">
+                    <span class="gus-bc-title">Booth Coverage \u2014 Election Day</span>
+                    <span class="gus-bc-close" title="Close">&times;</span>
+                </div>
+                <div class="gus-bc-summary"></div>
+                <div class="gus-bc-status"><span class="gus-spinner"></span> Loading...</div>
+                <table class="gus-bc-table"></table>
+                <div class="gus-bc-actions" style="margin-top:12px;text-align:center;"></div>
+            `;
+
+            popup.querySelector('.gus-bc-close').addEventListener('click', () => { hideBcTooltip(); overlay.remove(); });
+            overlay.appendChild(popup);
+            document.body.appendChild(overlay);
+
+            const tableEl = popup.querySelector('.gus-bc-table');
+            const statusEl = popup.querySelector('.gus-bc-status');
+            const summaryEl = popup.querySelector('.gus-bc-summary');
+            const actionsEl = popup.querySelector('.gus-bc-actions');
+
+            const BC_CACHE_TTL = 30 * 60 * 1000;
+            if (boothCoverageCache && (Date.now() - boothCoverageCache.timestamp) < BC_CACHE_TTL) {
+                renderCoverageTable(boothCoverageCache.results, tableEl, summaryEl);
+                statusEl.innerHTML = `${boothCoverageCache.results.length} electorates loaded \u2014 ${cacheAgeText(boothCoverageCache.timestamp)}`;
+                actionsEl.innerHTML = '<button class="gus-bc-btn gus-bc-refresh-btn">Refresh</button>';
+                actionsEl.querySelector('.gus-bc-refresh-btn').addEventListener('click', () => {
+                    boothCoverageCache = null;
+                    overlay.remove();
+                    openBoothCoverageModal();
+                });
+                return;
+            }
+
+            const results = [];
+            let loaded = 0;
+            let aborted = false;
+            const ordered = ALL_ELECTORATES;
+
+            ordered.forEach(([name, id], i) => {
+                setTimeout(() => {
+                    if (aborted) return;
+                    fetchBoothRoster(id, function(data, err) {
+                        if (aborted) return;
+                        loaded++;
+                        if (err === 'not_logged_in') {
+                            aborted = true;
+                            statusEl.innerHTML = '';
+                            tableEl.innerHTML = '';
+                            summaryEl.innerHTML = `<div class="gus-bc-auth-error">Not logged into Rocket.<br>Open <a href="https://contact-sa.greens.org.au" target="_blank">contact-sa.greens.org.au</a> in another tab, log in, then try again.</div>`;
+                            return;
+                        }
+                        const booths = data ? parseElectionDayBooths(data) : [];
+                        const summary = computeElectorateSummary(booths);
+                        results.push({ name, id, booths, summary });
+                        renderCoverageTable(results, tableEl, summaryEl);
+                        statusEl.textContent = `Loading ${loaded} / ${ordered.length}...`;
+                        if (loaded >= ordered.length) {
+                            boothCoverageCache = { results: [...results], timestamp: Date.now() };
+                            statusEl.innerHTML = `${ordered.length} electorates loaded \u2014 ${cacheAgeText(boothCoverageCache.timestamp)}`;
+                            actionsEl.innerHTML = '<button class="gus-bc-btn gus-bc-refresh-btn">Refresh</button>';
+                            actionsEl.querySelector('.gus-bc-refresh-btn').addEventListener('click', () => {
+                                boothCoverageCache = null;
+                                overlay.remove();
+                                openBoothCoverageModal();
+                            });
+                        }
+                    });
+                }, i * 100);
+            });
+        }
+
         function updateRosterWidget() {
             const widget = document.querySelector('.gus-roster-widget');
             if (!widget) return;
@@ -1518,6 +1952,7 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                 <div style="display:flex;align-items:center;gap:6px;">
                     <span class="gus-roster-title">Roster progress</span>
                     <button class="gus-roster-refresh" title="Refresh">&#x21bb;</button>
+                    <button class="gus-bc-btn" title="Booth Coverage Dashboard">Booths</button>
                 </div>
                 <div class="gus-roster-body">
                     <span class="gus-roster-loading">Waiting for auth...</span>
@@ -1526,6 +1961,10 @@ The election has now been called! We need people to hand out 'How to Vote' cards
 
             widget.querySelector('.gus-roster-refresh').addEventListener('click', () => {
                 fetchRosterCount();
+            });
+
+            widget.querySelector('.gus-bc-btn').addEventListener('click', () => {
+                openBoothCoverageModal();
             });
 
             // Insert before the stats container (to the left)
