@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         List Manager Tweaks
 // @namespace    https://github.com/choujar/campaign-userscripts
-// @version      1.31.1
+// @version      1.31.2
 // @description  UX improvements for List Manager and Rocket
 // @author       Sahil Choujar
 // @match        https://listmanager.greens.org.au/*
@@ -601,8 +601,15 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                 width: 960px;
                 max-width: 95vw;
                 max-height: 90vh;
-                overflow-y: auto;
+                overflow: hidden;
+                display: flex;
+                flex-direction: column;
                 box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+            }
+            .gus-bc-table-wrap {
+                flex: 1;
+                overflow-y: auto;
+                min-height: 0;
             }
             .gus-bc-header {
                 display: flex;
@@ -635,7 +642,8 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                 position: sticky;
                 top: 0;
                 background: #fff;
-                z-index: 1;
+                z-index: 2;
+                box-shadow: 0 2px 0 #e0e0e0;
             }
             .gus-bc-table th:first-child { text-align: left; min-width: 140px; }
             .gus-bc-row { cursor: pointer; transition: background 0.1s; }
@@ -1840,7 +1848,7 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                 </div>
                 <div class="gus-bc-summary"></div>
                 <div class="gus-bc-status"><span class="gus-spinner"></span> Loading...</div>
-                <table class="gus-bc-table"></table>
+                <div class="gus-bc-table-wrap"><table class="gus-bc-table"></table></div>
                 <div class="gus-bc-actions" style="margin-top:12px;text-align:center;"></div>
             `;
 
