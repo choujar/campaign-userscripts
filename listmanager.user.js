@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         List Manager Tweaks
 // @namespace    https://github.com/choujar/campaign-userscripts
-// @version      1.31.6
+// @version      1.31.7
 // @description  UX improvements for List Manager and Rocket
 // @author       Sahil Choujar
 // @match        https://listmanager.greens.org.au/*
@@ -1919,27 +1919,36 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                         if (err === 'not_logged_in') {
                             authFails++;
                         } else {
-                            const booths = data ? parseElectionDayBooths(data) : [];
-                            const summary = computeElectorateSummary(booths);
-                            results.push({ name, id, booths, summary, _raw: data });
-                            renderCoverageTable(results, tableEl, summaryEl);
+                            try {
+                                const booths = data ? parseElectionDayBooths(data) : [];
+                                const summary = computeElectorateSummary(booths);
+                                results.push({ name, id, booths, summary, _raw: data });
+                                renderCoverageTable(results, tableEl, summaryEl);
+                            } catch (e) {
+                                console.error('[GUS] Error parsing', name, ':', e);
+                            }
                         }
                         statusEl.textContent = `Loading ${loaded} / ${ordered.length}...`;
                         if (loaded >= ordered.length) {
-                            if (results.length === 0 && authFails > 0) {
-                                statusEl.innerHTML = '';
-                                summaryEl.innerHTML = `<div class="gus-bc-auth-error">Not logged into Rocket.<br>Open <a href="https://contact-sa.greens.org.au" target="_blank">contact-sa.greens.org.au</a> in another tab, log in, then try again.</div>`;
-                                return;
+                            try {
+                                if (results.length === 0 && authFails > 0) {
+                                    statusEl.innerHTML = '';
+                                    summaryEl.innerHTML = `<div class="gus-bc-auth-error">Not logged into Rocket.<br>Open <a href="https://contact-sa.greens.org.au" target="_blank">contact-sa.greens.org.au</a> in another tab, log in, then try again.</div>`;
+                                    return;
+                                }
+                                boothCoverageCache = { results: [...results], timestamp: Date.now() };
+                                const warn = authFails > 0 ? ` (${authFails} failed)` : '';
+                                statusEl.innerHTML = `${results.length} electorates loaded${warn} \u2014 ${cacheAgeText(boothCoverageCache.timestamp)}`;
+                                actionsEl.innerHTML = '<button class="gus-bc-btn gus-bc-refresh-btn">Refresh</button>';
+                                actionsEl.querySelector('.gus-bc-refresh-btn').addEventListener('click', () => {
+                                    boothCoverageCache = null;
+                                    overlay.remove();
+                                    openBoothCoverageModal();
+                                });
+                            } catch (e) {
+                                console.error('[GUS] Error completing load:', e);
+                                statusEl.textContent = `${results.length} electorates loaded (with errors)`;
                             }
-                            boothCoverageCache = { results: [...results], timestamp: Date.now() };
-                            const warn = authFails > 0 ? ` (${authFails} failed)` : '';
-                            statusEl.innerHTML = `${results.length} electorates loaded${warn} \u2014 ${cacheAgeText(boothCoverageCache.timestamp)}`;
-                            actionsEl.innerHTML = '<button class="gus-bc-btn gus-bc-refresh-btn">Refresh</button>';
-                            actionsEl.querySelector('.gus-bc-refresh-btn').addEventListener('click', () => {
-                                boothCoverageCache = null;
-                                overlay.remove();
-                                openBoothCoverageModal();
-                            });
                         }
                     });
                 }, i * 100);
