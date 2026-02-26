@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         List Manager Tweaks
 // @namespace    https://github.com/choujar/campaign-userscripts
-// @version      1.31.3
+// @version      1.31.4
 // @description  UX improvements for List Manager and Rocket
 // @author       Sahil Choujar
 // @match        https://listmanager.greens.org.au/*
@@ -1620,15 +1620,6 @@ The election has now been called! We need people to hand out 'How to Vote' cards
         function parseElectionDayBooths(commands) {
             if (!commands || !commands.booths) return [];
             const edBooths = commands.booths.filter(b => b.info && b.info.prepoll === '0');
-            if (edBooths.length > 0 && !parseElectionDayBooths._logged) {
-                parseElectionDayBooths._logged = true;
-                const sample = edBooths[0];
-                console.log('[GUS] Sample booth keys:', Object.keys(sample));
-                console.log('[GUS] Sample booth.info:', sample.info);
-                console.log('[GUS] Sample booth.slots:', sample.slots);
-                console.log('[GUS] Sample booth.roster:', sample.roster);
-                console.log('[GUS] Sample booth.volunteers:', sample.volunteers);
-            }
             return edBooths
                 .map(b => {
                     const info = b.info;
@@ -1812,6 +1803,8 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                     row.classList.add('gus-bc-row-expanded');
                     const electorate = sorted.find(r => String(r.id) === eid);
                     if (!electorate) return;
+                    console.log(`[GUS] ${electorate.name} — raw API data:`, electorate._raw);
+                    console.log(`[GUS] ${electorate.name} — parsed booths:`, electorate.booths);
 
                     const booths = [...electorate.booths].sort((a, b) => {
                         if (b.priority !== a.priority) return b.priority - a.priority;
@@ -1922,7 +1915,7 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                         } else {
                             const booths = data ? parseElectionDayBooths(data) : [];
                             const summary = computeElectorateSummary(booths);
-                            results.push({ name, id, booths, summary });
+                            results.push({ name, id, booths, summary, _raw: data });
                             renderCoverageTable(results, tableEl, summaryEl);
                         }
                         statusEl.textContent = `Loading ${loaded} / ${ordered.length}...`;
