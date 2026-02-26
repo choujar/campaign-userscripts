@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         List Manager Tweaks
 // @namespace    https://github.com/choujar/campaign-userscripts
-// @version      1.31.7
+// @version      1.32.0
 // @description  UX improvements for List Manager and Rocket
 // @author       Sahil Choujar
 // @match        https://listmanager.greens.org.au/*
@@ -1688,6 +1688,212 @@ The election has now been called! We need people to hand out 'How to Vote' cards
             return 'gus-bc-pct-bad';
         }
 
+        const BC_COLORS = {
+            full: { bg: '#e8f5e9', text: '#2e7d32' },
+            partial: { bg: '#fff3e0', text: '#e65100' },
+            empty: { bg: '#ffebee', text: '#c62828' },
+            none: { bg: null, text: '#ccc' },
+            unknown: { bg: '#e3f2fd', text: '#1565c0' },
+            pctGood: '#2e7d32', pctWarn: '#e65100', pctBad: '#c62828'
+        };
+
+        function bcSlotColors(have, need) {
+            if (need < 0) return have > 0 ? BC_COLORS.unknown : BC_COLORS.none;
+            if (need === 0) return BC_COLORS.none;
+            if (have >= need) return BC_COLORS.full;
+            if (have > 0) return BC_COLORS.partial;
+            return BC_COLORS.empty;
+        }
+
+        function bcPctColor(pct) {
+            if (pct >= 80) return BC_COLORS.pctGood;
+            if (pct >= 40) return BC_COLORS.pctWarn;
+            return BC_COLORS.pctBad;
+        }
+
+        function bcDrawRoundedRect(ctx, x, y, w, h, r) {
+            ctx.beginPath();
+            ctx.moveTo(x + r, y);
+            ctx.lineTo(x + w - r, y);
+            ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+            ctx.lineTo(x + w, y + h - r);
+            ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+            ctx.lineTo(x + r, y + h);
+            ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+            ctx.lineTo(x, y + r);
+            ctx.quadraticCurveTo(x, y, x + r, y);
+            ctx.closePath();
+        }
+
+        function bcDrawTableToCanvas(title, headers, rows) {
+            const scale = 2;
+            const colWidths = [220, 50, 70, 70, 70, 70, 70, 60];
+            const totalW = colWidths.reduce((a, b) => a + b, 0) + 20;
+            const headerH = 32;
+            const rowH = 26;
+            const titleH = 40;
+            const padX = 10;
+            const totalH = titleH + headerH + rows.length * rowH + 10;
+
+            const canvas = document.createElement('canvas');
+            canvas.width = totalW * scale;
+            canvas.height = totalH * scale;
+            const ctx = canvas.getContext('2d');
+            ctx.scale(scale, scale);
+
+            ctx.fillStyle = '#fff';
+            ctx.fillRect(0, 0, totalW, totalH);
+
+            ctx.fillStyle = '#333';
+            ctx.font = 'bold 14px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+            ctx.fillText(title, padX, 24);
+
+            let y = titleH;
+            ctx.fillStyle = '#f5f5f5';
+            ctx.fillRect(0, y, totalW, headerH);
+            ctx.fillStyle = '#666';
+            ctx.font = 'bold 11px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+            let x = padX;
+            for (let i = 0; i < headers.length; i++) {
+                const align = i === 0 ? 'left' : 'center';
+                const cx = align === 'center' ? x + colWidths[i] / 2 : x;
+                ctx.textAlign = align;
+                ctx.fillText(headers[i], cx, y + 20);
+                x += colWidths[i];
+            }
+
+            y += headerH;
+            ctx.font = '11px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+
+            for (const row of rows) {
+                if (row.divider) {
+                    ctx.strokeStyle = '#ddd';
+                    ctx.lineWidth = 0.5;
+                    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(totalW, y); ctx.stroke();
+                }
+
+                x = padX;
+                for (let i = 0; i < row.cells.length; i++) {
+                    const cell = row.cells[i];
+                    const cw = colWidths[i];
+
+                    if (cell.badge) {
+                        const colors = cell.colors;
+                        const bw = Math.max(ctx.measureText(cell.text).width + 10, 36);
+                        const bx = x + (cw - bw) / 2;
+                        const by = y + 3;
+                        const bh = rowH - 6;
+                        if (colors.bg) {
+                            ctx.fillStyle = colors.bg;
+                            bcDrawRoundedRect(ctx, bx, by, bw, bh, 3);
+                            ctx.fill();
+                        }
+                        ctx.fillStyle = colors.text;
+                        ctx.textAlign = 'center';
+                        ctx.font = 'bold 11px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+                        ctx.fillText(cell.text, x + cw / 2, y + 17);
+                        ctx.font = '11px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+                    } else {
+                        ctx.fillStyle = cell.color || '#333';
+                        ctx.textAlign = cell.align || 'left';
+                        ctx.font = cell.bold ? 'bold 11px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif' : '11px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+                        const tx = cell.align === 'center' ? x + cw / 2 : cell.align === 'right' ? x + cw - 4 : x;
+                        ctx.fillText(cell.text, tx, y + 17);
+                    }
+                    x += cw;
+                }
+                y += rowH;
+            }
+            return canvas;
+        }
+
+        function bcDownloadCanvas(canvas, filename) {
+            canvas.toBlob(function(blob) {
+                const a = document.createElement('a');
+                a.href = URL.createObjectURL(blob);
+                a.download = filename;
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                URL.revokeObjectURL(a.href);
+            }, 'image/png');
+        }
+
+        function bcExportOverview(results) {
+            const sorted = bcSortResults(results);
+            const headers = ['Electorate', 'Booths', ...BOOTH_TIME_SLOTS.map(s => s.label), '%'];
+            const rows = [];
+            for (const r of sorted) {
+                const s = r.summary;
+                const cells = [
+                    { text: r.name, bold: true },
+                    { text: String(s.totalBooths), align: 'center' }
+                ];
+                for (let si = 0; si < BOOTH_TIME_SLOTS.length; si++) {
+                    const ss = s.slotSummaries[si];
+                    if (ss.totalNeed > 0) {
+                        cells.push({ text: `${ss.totalHave}/${ss.totalNeed}`, badge: true, colors: bcSlotColors(ss.totalHave, ss.totalNeed) });
+                    } else if (ss.allHave > 0) {
+                        cells.push({ text: String(ss.allHave), badge: true, colors: BC_COLORS.unknown });
+                    } else {
+                        cells.push({ text: '\u00b7', align: 'center', color: '#ccc' });
+                    }
+                }
+                if (s.hasAnyKnownNeed) {
+                    cells.push({ text: s.overallPct + '%', align: 'right', bold: true, color: bcPctColor(s.overallPct) });
+                } else {
+                    cells.push({ text: '\u2014', align: 'center', color: '#999' });
+                }
+                rows.push({ cells });
+            }
+            const canvas = bcDrawTableToCanvas('Booth Coverage \u2014 Election Day', headers, rows);
+            bcDownloadCanvas(canvas, 'booth-coverage-overview.png');
+        }
+
+        function bcExportElectorate(electorate) {
+            const booths = [...electorate.booths].sort((a, b) => {
+                if (b.priority !== a.priority) return b.priority - a.priority;
+                return a.name.localeCompare(b.name);
+            });
+            const headers = ['Booth', 'Need', ...BOOTH_TIME_SLOTS.map(s => s.label), '%'];
+            const rows = [];
+            for (const booth of booths) {
+                const stars = PRIORITY_STARS[booth.priority] || '\u2605';
+                const isUnknown = booth.peopleRequired < 0;
+                const cells = [
+                    { text: stars + ' ' + booth.name, color: '#333' },
+                    { text: isUnknown ? '\u2014' : String(booth.peopleRequired), align: 'center', color: '#999' }
+                ];
+                for (let si = 0; si < BOOTH_TIME_SLOTS.length; si++) {
+                    const sc = booth.slotCoverage[si];
+                    if (isUnknown) {
+                        if (sc.have > 0) {
+                            cells.push({ text: String(sc.have), badge: true, colors: BC_COLORS.unknown });
+                        } else {
+                            cells.push({ text: '\u00b7', align: 'center', color: '#ccc' });
+                        }
+                    } else {
+                        if (sc.need === 0) {
+                            cells.push({ text: '\u00b7', align: 'center', color: '#ccc' });
+                        } else {
+                            cells.push({ text: `${sc.have}/${sc.need}`, badge: true, colors: bcSlotColors(sc.have, sc.need) });
+                        }
+                    }
+                }
+                if (isUnknown) {
+                    cells.push({ text: '\u2014', align: 'center', color: '#999' });
+                } else {
+                    const pct = booth.peopleRequired > 0
+                        ? Math.round(booth.slotCoverage.reduce((s, c) => s + Math.min(c.have, c.need), 0) / (booth.peopleRequired * BOOTH_TIME_SLOTS.length) * 100)
+                        : 0;
+                    cells.push({ text: pct + '%', align: 'right', bold: true, color: bcPctColor(pct) });
+                }
+                rows.push({ cells });
+            }
+            const canvas = bcDrawTableToCanvas('Booth Coverage \u2014 ' + electorate.name, headers, rows);
+            bcDownloadCanvas(canvas, 'booth-coverage-' + electorate.name.toLowerCase().replace(/\s+/g, '-') + '.png');
+        }
+
         function minsToTime(mins) {
             const h = Math.floor(mins / 60);
             const m = mins % 60;
@@ -1763,7 +1969,7 @@ The election has now been called! We need people to hand out 'How to Vote' cards
             for (const r of sorted) {
                 const s = r.summary;
                 html += `<tr class="gus-bc-row" data-eid="${r.id}">`;
-                html += `<td><span class="gus-bc-expand-icon">\u25B6</span> ${escapeHtml(r.name)}</td>`;
+                html += `<td><span class="gus-bc-expand-icon">\u25B6</span> ${escapeHtml(r.name)} <span class="gus-bc-dl-btn" data-eid="${r.id}" title="Download image" style="cursor:pointer;opacity:0.3;font-size:10px;">\u2B07</span></td>`;
                 html += `<td>${s.totalBooths}</td>`;
                 for (let si = 0; si < BOOTH_TIME_SLOTS.length; si++) {
                     const ss = s.slotSummaries[si];
@@ -1794,6 +2000,17 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                     else { bcSortCol = col; bcSortAsc = true; }
                     renderCoverageTable(results, tableEl, statusEl);
                 });
+            });
+
+            tableEl.querySelectorAll('.gus-bc-dl-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const eid = btn.dataset.eid;
+                    const electorate = sorted.find(r => String(r.id) === eid);
+                    if (electorate) bcExportElectorate(electorate);
+                });
+                btn.addEventListener('mouseenter', () => { btn.style.opacity = '0.8'; });
+                btn.addEventListener('mouseleave', () => { btn.style.opacity = '0.3'; });
             });
 
             tableEl.querySelectorAll('.gus-bc-row').forEach(row => {
@@ -1877,6 +2094,7 @@ The election has now been called! We need people to hand out 'How to Vote' cards
             popup.innerHTML = `
                 <div class="gus-bc-header">
                     <span class="gus-bc-title">Booth Coverage \u2014 Election Day</span>
+                    <span class="gus-bc-dl-all" title="Download overview image" style="cursor:pointer;margin-left:8px;font-size:14px;opacity:0.5;">&#x2B07;</span>
                     <span class="gus-bc-close" title="Close">&times;</span>
                 </div>
                 <div class="gus-bc-summary"></div>
@@ -1886,6 +2104,8 @@ The election has now been called! We need people to hand out 'How to Vote' cards
             `;
 
             popup.querySelector('.gus-bc-close').addEventListener('click', () => { hideBcTooltip(); overlay.remove(); });
+            const dlAllBtn = popup.querySelector('.gus-bc-dl-all');
+            dlAllBtn.style.display = 'none';
             overlay.appendChild(popup);
             document.body.appendChild(overlay);
 
@@ -1895,9 +2115,15 @@ The election has now been called! We need people to hand out 'How to Vote' cards
             const actionsEl = popup.querySelector('.gus-bc-actions');
 
             const BC_CACHE_TTL = 30 * 60 * 1000;
+            function enableDlAll(data) {
+                dlAllBtn.style.display = 'inline';
+                dlAllBtn.addEventListener('click', (e) => { e.stopPropagation(); bcExportOverview(data); });
+            }
+
             if (boothCoverageCache && (Date.now() - boothCoverageCache.timestamp) < BC_CACHE_TTL) {
                 renderCoverageTable(boothCoverageCache.results, tableEl, summaryEl);
                 statusEl.innerHTML = `${boothCoverageCache.results.length} electorates loaded \u2014 ${cacheAgeText(boothCoverageCache.timestamp)}`;
+                enableDlAll(boothCoverageCache.results);
                 actionsEl.innerHTML = '<button class="gus-bc-btn gus-bc-refresh-btn">Refresh</button>';
                 actionsEl.querySelector('.gus-bc-refresh-btn').addEventListener('click', () => {
                     boothCoverageCache = null;
@@ -1939,6 +2165,7 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                                 boothCoverageCache = { results: [...results], timestamp: Date.now() };
                                 const warn = authFails > 0 ? ` (${authFails} failed)` : '';
                                 statusEl.innerHTML = `${results.length} electorates loaded${warn} \u2014 ${cacheAgeText(boothCoverageCache.timestamp)}`;
+                                enableDlAll(results);
                                 actionsEl.innerHTML = '<button class="gus-bc-btn gus-bc-refresh-btn">Refresh</button>';
                                 actionsEl.querySelector('.gus-bc-refresh-btn').addEventListener('click', () => {
                                     boothCoverageCache = null;
