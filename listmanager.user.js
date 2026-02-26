@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         List Manager Tweaks
 // @namespace    https://github.com/choujar/campaign-userscripts
-// @version      1.29.3
+// @version      1.30.0
 // @description  UX improvements for List Manager and Rocket
 // @author       Sahil Choujar
 // @match        https://listmanager.greens.org.au/*
@@ -868,16 +868,19 @@ The election has now been called! We need people to hand out 'How to Vote' cards
         }
 
         // --- Roster count tracker ---
-        const ROSTER_TARGET = 1602;
+        const TOTAL_TARGET = 1602;
+        const EV_TARGET = 552;
+        const PD_TARGET = 1050;
         const HEYSEN_ID = 140532;
+        const PD_COLOR = '#1565c0';
+        const EV_COLOR = '#7b1fa2';
         const HEYSEN_COLOR = '#2e7d32';
-        const OTHER_COLOR = '#888';
-        const SELF_ROSTERED_COLOR = '#1565c0';
-        const EARLY_VOTING_COLOR = '#7b1fa2';
-        let rosterTotal = null;
-        let rosterHeysen = null;
-        let rosterSelfRostered = null;
-        let rosterEarlyVoting = null;
+        let pdConfirmed = null;
+        let pdSelfRostered = null;
+        let pdHeysen = null;
+        let evConfirmed = null;
+        let evSelfRostered = null;
+        let evHeysen = null;
         let rosterLoading = false;
         let breakdownCache = null; // { results: [...], timestamp: Date.now() }
         let rosterError = null;
@@ -937,11 +940,44 @@ The election has now been called! We need people to hand out 'How to Vote' cards
             });
         }
 
-        function buildEarlyVotingTree() {
+        function buildEvConfirmedTree() {
             return JSON.stringify({
                 op: 'intersection',
                 nodes: [
                     { op: 'filter', filter: { name: 'roster', value: { electionId: 182, electorateIds: [], rosterTypes: ['Rostered'], shiftStatus: 'Confirmed', votingPeriod: 'Early voting' } } }
+                ],
+                printTime: false,
+                useAdvancedSearchII: false
+            });
+        }
+
+        function buildEvSelfRosteredTree() {
+            return JSON.stringify({
+                op: 'intersection',
+                nodes: [
+                    { op: 'filter', filter: { name: 'roster', value: { electionId: 182, electorateIds: [], rosterTypes: ['Self-rostered'], shiftStatus: 'Any', votingPeriod: 'Early voting' } } }
+                ],
+                printTime: false,
+                useAdvancedSearchII: false
+            });
+        }
+
+        function buildPdHeysenTree() {
+            return JSON.stringify({
+                op: 'intersection',
+                nodes: [
+                    { op: 'filter', filter: { name: 'roster', value: { electionId: 182, electorateIds: [HEYSEN_ID], rosterTypes: ['Rostered', 'Self-rostered'], shiftStatus: 'Any', votingPeriod: 'Polling Day' } } }
+                ],
+                printTime: false,
+                useAdvancedSearchII: false
+            });
+        }
+
+        function buildEvHeysenTree() {
+            return JSON.stringify({
+                op: 'intersection',
+                nodes: [
+                    { op: 'filter', filter: { name: 'roster', value: { electionId: 182, electorateIds: [HEYSEN_ID], rosterTypes: ['Rostered', 'Self-rostered'], shiftStatus: 'Any', votingPeriod: 'Early voting' } } }
                 ],
                 printTime: false,
                 useAdvancedSearchII: false
@@ -994,10 +1030,12 @@ The election has now been called! We need people to hand out 'How to Vote' cards
             }
             rosterLoading = true;
             rosterError = null;
-            rosterTotal = null;
-            rosterHeysen = null;
-            rosterSelfRostered = null;
-            rosterEarlyVoting = null;
+            pdConfirmed = null;
+            pdSelfRostered = null;
+            pdHeysen = null;
+            evConfirmed = null;
+            evSelfRostered = null;
+            evHeysen = null;
             updateRosterWidget();
 
             let done = 0;
@@ -1005,7 +1043,7 @@ The election has now been called! We need people to hand out 'How to Vote' cards
 
             function checkDone() {
                 done++;
-                if (done < 4) { updateRosterWidget(); return; }
+                if (done < 6) { updateRosterWidget(); return; }
                 rosterLoading = false;
                 if (authExpired) {
                     capturedJwt = null;
@@ -1015,34 +1053,48 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                     return;
                 }
                 updateRosterWidget();
-                if (callback) callback(rosterTotal, rosterError);
+                if (callback) callback(pdConfirmed, rosterError);
             }
 
             fetchOneRoster(buildTotalTree(), function(count, err) {
                 if (err === 'auth_expired') { authExpired = true; }
                 else if (err) { rosterError = err; }
-                else { rosterTotal = count; }
-                checkDone();
-            });
-
-            fetchOneRoster(buildElectorateTree(HEYSEN_ID), function(count, err) {
-                if (err === 'auth_expired') { authExpired = true; }
-                else if (err) { if (!rosterError) rosterError = err; }
-                else { rosterHeysen = count; }
+                else { pdConfirmed = count; }
                 checkDone();
             });
 
             fetchOneRoster(buildSelfRosteredTree(), function(count, err) {
                 if (err === 'auth_expired') { authExpired = true; }
                 else if (err) { if (!rosterError) rosterError = err; }
-                else { rosterSelfRostered = count; }
+                else { pdSelfRostered = count; }
                 checkDone();
             });
 
-            fetchOneRoster(buildEarlyVotingTree(), function(count, err) {
+            fetchOneRoster(buildPdHeysenTree(), function(count, err) {
                 if (err === 'auth_expired') { authExpired = true; }
                 else if (err) { if (!rosterError) rosterError = err; }
-                else { rosterEarlyVoting = count; }
+                else { pdHeysen = count; }
+                checkDone();
+            });
+
+            fetchOneRoster(buildEvConfirmedTree(), function(count, err) {
+                if (err === 'auth_expired') { authExpired = true; }
+                else if (err) { if (!rosterError) rosterError = err; }
+                else { evConfirmed = count; }
+                checkDone();
+            });
+
+            fetchOneRoster(buildEvSelfRosteredTree(), function(count, err) {
+                if (err === 'auth_expired') { authExpired = true; }
+                else if (err) { if (!rosterError) rosterError = err; }
+                else { evSelfRostered = count; }
+                checkDone();
+            });
+
+            fetchOneRoster(buildEvHeysenTree(), function(count, err) {
+                if (err === 'auth_expired') { authExpired = true; }
+                else if (err) { if (!rosterError) rosterError = err; }
+                else { evHeysen = count; }
                 checkDone();
             });
         }
@@ -1144,7 +1196,7 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                                 <svg viewBox="0 0 100 100">
                                     <circle class="gus-ring-bg" cx="50" cy="50" r="40"/>
                                 </svg>
-                                <span class="gus-roster-pct" data-default="${rosterTotal?.toLocaleString() ?? '...'}">${rosterTotal?.toLocaleString() ?? '...'}</span>
+                                <span class="gus-roster-pct" data-default="${((pdConfirmed ?? 0) + (pdSelfRostered ?? 0) + (evConfirmed ?? 0) + (evSelfRostered ?? 0)).toLocaleString()}">${((pdConfirmed ?? 0) + (pdSelfRostered ?? 0) + (evConfirmed ?? 0) + (evSelfRostered ?? 0)).toLocaleString()}</span>
                             </div>
                             <div class="gus-breakdown-ring-label">By electorate</div>
                         </div>
@@ -1155,7 +1207,10 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                                 </svg>
                                 <span class="gus-roster-pct gus-total-pct">0%</span>
                             </div>
-                            <div class="gus-breakdown-ring-label"><strong>${((rosterTotal ?? 0) + (rosterSelfRostered ?? 0) + (rosterEarlyVoting ?? 0)).toLocaleString()}</strong> <span style="color:${HEYSEN_COLOR};">(${(rosterHeysen ?? 0).toLocaleString()})</span> <span style="color:${SELF_ROSTERED_COLOR};">(${(rosterSelfRostered ?? 0).toLocaleString()})</span> <span style="color:${EARLY_VOTING_COLOR};">(${(rosterEarlyVoting ?? 0).toLocaleString()})</span> / ${ROSTER_TARGET.toLocaleString()}</div>
+                            <div class="gus-breakdown-ring-label" style="text-align:left;line-height:1.6;">
+                                <div><span style="color:${EV_COLOR};font-weight:600;">EV:</span> <strong>${((evConfirmed ?? 0) + (evSelfRostered ?? 0)).toLocaleString()}</strong> <span style="color:${HEYSEN_COLOR};">(Heysen ${(evHeysen ?? 0).toLocaleString()})</span> <span style="color:#999;">(self ${(evSelfRostered ?? 0).toLocaleString()})</span> / ${EV_TARGET.toLocaleString()}</div>
+                                <div><span style="color:${PD_COLOR};font-weight:600;">PD:</span> <strong>${((pdConfirmed ?? 0) + (pdSelfRostered ?? 0)).toLocaleString()}</strong> <span style="color:${HEYSEN_COLOR};">(Heysen ${(pdHeysen ?? 0).toLocaleString()})</span> <span style="color:#999;">(self ${(pdSelfRostered ?? 0).toLocaleString()})</span> / ${PD_TARGET.toLocaleString()}</div>
+                            </div>
                         </div>
                     </div>
                     <div class="gus-breakdown-status">Loading 0 / ${ALL_ELECTORATES.length}...</div>
@@ -1179,29 +1234,24 @@ The election has now been called! We need people to hand out 'How to Vote' cards
             const totalPctEl = popup.querySelector('.gus-total-pct');
 
             function updateTotalRing() {
-                const heysen = rosterHeysen ?? 0;
-                const other = (rosterTotal ?? 0) - heysen;
-                const selfR = rosterSelfRostered ?? 0;
-                const early = rosterEarlyVoting ?? 0;
-                const grandTotal = (rosterTotal ?? 0) + selfR + early;
-                const pct = Math.min(grandTotal / ROSTER_TARGET, 1);
+                const pdTotal = (pdConfirmed ?? 0) + (pdSelfRostered ?? 0);
+                const evTotal = (evConfirmed ?? 0) + (evSelfRostered ?? 0);
+                const grandTotal = pdTotal + evTotal;
 
-                totalPctEl.textContent = `${Math.round(pct * 100)}%`;
-                totalPctEl.dataset.default = `${Math.round(pct * 100)}%`;
+                totalPctEl.textContent = grandTotal.toLocaleString();
+                totalPctEl.dataset.default = grandTotal.toLocaleString();
 
                 totalSvg.querySelectorAll('.gus-ring-seg').forEach(el => el.remove());
 
                 const r = 40;
                 const circ = 2 * Math.PI * r;
                 const segs = [
-                    { color: HEYSEN_COLOR, count: heysen, label: `Heysen: ${heysen}` },
-                    { color: OTHER_COLOR, count: other, label: `Other: ${other}` },
-                    { color: SELF_ROSTERED_COLOR, count: selfR, label: `Self-rostered: ${selfR}` },
-                    { color: EARLY_VOTING_COLOR, count: early, label: `Early voting: ${early}` }
+                    { color: PD_COLOR, count: pdTotal, label: `PD: ${pdTotal}` },
+                    { color: EV_COLOR, count: evTotal, label: `EV: ${evTotal}` }
                 ];
                 let rotation = 0;
                 for (const seg of segs) {
-                    const segPct = seg.count / ROSTER_TARGET;
+                    const segPct = seg.count / TOTAL_TARGET;
                     const len = Math.min(segPct, 1) * circ;
                     if (len < 0.1) continue;
                     const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
@@ -1333,7 +1383,7 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                 });
             }
 
-            // Show progress ring immediately (rosterTotal already known)
+            // Show progress ring immediately (pdConfirmed already known)
             updateTotalRing();
 
             // Use cache if fresh (< 30 min), otherwise fetch
@@ -1355,10 +1405,12 @@ The election has now been called! We need people to hand out 'How to Vote' cards
 
             if (rosterLoading) {
                 const labels = [
-                    ['Confirmed', rosterTotal],
-                    ['Heysen', rosterHeysen],
-                    ['Self-rostered', rosterSelfRostered],
-                    ['Early voting', rosterEarlyVoting]
+                    ['PD confirmed', pdConfirmed],
+                    ['PD self', pdSelfRostered],
+                    ['PD Heysen', pdHeysen],
+                    ['EV confirmed', evConfirmed],
+                    ['EV self', evSelfRostered],
+                    ['EV Heysen', evHeysen]
                 ];
                 const lines = labels.map(([name, val]) =>
                     val !== null ? `<div style="color:#4caf50;">✓ ${escapeHtml(name)}</div>` : `<div style="color:#999;">${escapeHtml(name)}...</div>`
@@ -1370,38 +1422,31 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                 body.innerHTML = `<span class="gus-roster-error">${escapeHtml(rosterError)}</span>`;
                 return;
             }
-            if (rosterTotal !== null) {
-                const heysen = rosterHeysen ?? 0;
-                const other = rosterTotal - heysen;
-                const selfRostered = rosterSelfRostered ?? 0;
-                const earlyVoting = rosterEarlyVoting ?? 0;
-                const grandTotal = rosterTotal + selfRostered + earlyVoting;
-                const heysenPct = Math.min((heysen / ROSTER_TARGET) * 100, 100);
-                const otherPct = Math.min((other / ROSTER_TARGET) * 100, 100 - heysenPct);
-                const selfPct = Math.min((selfRostered / ROSTER_TARGET) * 100, Math.max(100 - heysenPct - otherPct, 0));
-                const earlyPct = Math.min((earlyVoting / ROSTER_TARGET) * 100, Math.max(100 - heysenPct - otherPct - selfPct, 0));
-                const totalPct = Math.round(Math.min((grandTotal / ROSTER_TARGET) * 100, 100));
+            if (pdConfirmed !== null) {
+                const pdTotal = (pdConfirmed ?? 0) + (pdSelfRostered ?? 0);
+                const evTotal = (evConfirmed ?? 0) + (evSelfRostered ?? 0);
+                const grandTotal = pdTotal + evTotal;
+                const pdPct = Math.min((pdTotal / TOTAL_TARGET) * 100, 100);
+                const evPct = Math.min((evTotal / TOTAL_TARGET) * 100, Math.max(100 - pdPct, 0));
 
                 const segments = [
-                    { color: HEYSEN_COLOR, pct: heysenPct, label: `${heysen}` },
-                    { color: OTHER_COLOR, pct: otherPct, label: `${other}` },
-                    { color: SELF_ROSTERED_COLOR, pct: selfPct, label: `${selfRostered}` },
-                    { color: EARLY_VOTING_COLOR, pct: earlyPct, label: `${earlyVoting}` }
+                    { color: PD_COLOR, pct: pdPct, label: `PD: ${pdTotal}` },
+                    { color: EV_COLOR, pct: evPct, label: `EV: ${evTotal}` }
                 ];
 
                 body.innerHTML = `
-                    ${buildRingHtml(segments, totalPct + '%')}
-                    <span class="gus-roster-count"><strong>${grandTotal.toLocaleString()}</strong> <span style="color:${HEYSEN_COLOR};">(${heysen.toLocaleString()})</span> <span style="color:${SELF_ROSTERED_COLOR};">(${selfRostered.toLocaleString()})</span> <span style="color:${EARLY_VOTING_COLOR};">(${earlyVoting.toLocaleString()})</span> / ${ROSTER_TARGET.toLocaleString()}</span>
+                    ${buildRingHtml(segments, grandTotal.toLocaleString())}
+                    <div class="gus-roster-count">
+                        <div><span style="color:${EV_COLOR};font-weight:600;">EV:</span> <strong>${evTotal.toLocaleString()}</strong> <span style="color:${HEYSEN_COLOR};">(Heysen ${(evHeysen ?? 0).toLocaleString()})</span> <span style="color:#999;">(self ${(evSelfRostered ?? 0).toLocaleString()})</span> / ${EV_TARGET.toLocaleString()}</div>
+                        <div><span style="color:${PD_COLOR};font-weight:600;">PD:</span> <strong>${pdTotal.toLocaleString()}</strong> <span style="color:${HEYSEN_COLOR};">(Heysen ${(pdHeysen ?? 0).toLocaleString()})</span> <span style="color:#999;">(self ${(pdSelfRostered ?? 0).toLocaleString()})</span> / ${PD_TARGET.toLocaleString()}</div>
+                    </div>
                     <div class="gus-roster-legend">
-                        <span><span class="gus-dot" style="background:${HEYSEN_COLOR};"></span>Heysen</span>
-                        <span><span class="gus-dot" style="background:${OTHER_COLOR};"></span>Other</span>
-                        <span><span class="gus-dot" style="background:${SELF_ROSTERED_COLOR};"></span>Self-rostered</span>
-                        <span><span class="gus-dot" style="background:${EARLY_VOTING_COLOR};"></span>Early voting</span>
+                        <span><span class="gus-dot" style="background:${PD_COLOR};"></span>Polling day</span>
+                        <span><span class="gus-dot" style="background:${EV_COLOR};"></span>Early voting</span>
                     </div>
                 `;
                 attachRingHover(widget);
 
-                // Click ring to open full breakdown
                 const ring = widget.querySelector('.gus-roster-ring');
                 if (ring && !ring.dataset.gusClick) {
                     ring.dataset.gusClick = '1';
@@ -1458,11 +1503,11 @@ The election has now been called! We need people to hand out 'How to Vote' cards
             if (!capturedJwt) {
                 capturedJwt = scanLocalStorageForJwt();
             }
-            if (capturedJwt && rosterTotal === null && !rosterLoading) {
+            if (capturedJwt && pdConfirmed === null && !rosterLoading) {
                 fetchRosterCount();
             }
             rosterJwtCheckCount++;
-            if (rosterTotal !== null || rosterJwtCheckCount > 30) {
+            if (pdConfirmed !== null || rosterJwtCheckCount > 30) {
                 clearInterval(rosterJwtCheckInterval);
             }
         }, 2000);
