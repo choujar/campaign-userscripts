@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         List Manager Tweaks
 // @namespace    https://github.com/choujar/campaign-userscripts
-// @version      1.30.0
+// @version      1.30.1
 // @description  UX improvements for List Manager and Rocket
 // @author       Sahil Choujar
 // @match        https://listmanager.greens.org.au/*
@@ -881,6 +881,9 @@ The election has now been called! We need people to hand out 'How to Vote' cards
         let evConfirmed = null;
         let evSelfRostered = null;
         let evHeysen = null;
+        let pdCaptains = null;
+        let evCaptains = null;
+        const CAPTAIN_COLOR = '#e65100';
         let rosterLoading = false;
         let breakdownCache = null; // { results: [...], timestamp: Date.now() }
         let rosterError = null;
@@ -984,6 +987,28 @@ The election has now been called! We need people to hand out 'How to Vote' cards
             });
         }
 
+        function buildPdCaptainsTree() {
+            return JSON.stringify({
+                op: 'intersection',
+                nodes: [
+                    { op: 'filter', filter: { name: 'roster', value: { electionId: 182, electorateIds: [], rosterTypes: ['Captain'], shiftStatus: 'Confirmed', votingPeriod: 'Polling Day' } } }
+                ],
+                printTime: false,
+                useAdvancedSearchII: false
+            });
+        }
+
+        function buildEvCaptainsTree() {
+            return JSON.stringify({
+                op: 'intersection',
+                nodes: [
+                    { op: 'filter', filter: { name: 'roster', value: { electionId: 182, electorateIds: [], rosterTypes: ['Captain'], shiftStatus: 'Confirmed', votingPeriod: 'Early voting' } } }
+                ],
+                printTime: false,
+                useAdvancedSearchII: false
+            });
+        }
+
         function buildElectorateTree(electorateId) {
             return JSON.stringify({
                 op: 'intersection',
@@ -1036,6 +1061,8 @@ The election has now been called! We need people to hand out 'How to Vote' cards
             evConfirmed = null;
             evSelfRostered = null;
             evHeysen = null;
+            pdCaptains = null;
+            evCaptains = null;
             updateRosterWidget();
 
             let done = 0;
@@ -1043,7 +1070,7 @@ The election has now been called! We need people to hand out 'How to Vote' cards
 
             function checkDone() {
                 done++;
-                if (done < 6) { updateRosterWidget(); return; }
+                if (done < 8) { updateRosterWidget(); return; }
                 rosterLoading = false;
                 if (authExpired) {
                     capturedJwt = null;
@@ -1095,6 +1122,20 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                 if (err === 'auth_expired') { authExpired = true; }
                 else if (err) { if (!rosterError) rosterError = err; }
                 else { evHeysen = count; }
+                checkDone();
+            });
+
+            fetchOneRoster(buildPdCaptainsTree(), function(count, err) {
+                if (err === 'auth_expired') { authExpired = true; }
+                else if (err) { if (!rosterError) rosterError = err; }
+                else { pdCaptains = count; }
+                checkDone();
+            });
+
+            fetchOneRoster(buildEvCaptainsTree(), function(count, err) {
+                if (err === 'auth_expired') { authExpired = true; }
+                else if (err) { if (!rosterError) rosterError = err; }
+                else { evCaptains = count; }
                 checkDone();
             });
         }
@@ -1208,8 +1249,8 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                                 <span class="gus-roster-pct gus-total-pct">0%</span>
                             </div>
                             <div class="gus-breakdown-ring-label" style="text-align:left;line-height:1.6;">
-                                <div><span style="color:${EV_COLOR};font-weight:600;">EV:</span> <strong>${((evConfirmed ?? 0) + (evSelfRostered ?? 0)).toLocaleString()}</strong> <span style="color:${HEYSEN_COLOR};">(Heysen ${(evHeysen ?? 0).toLocaleString()})</span> <span style="color:#999;">(self ${(evSelfRostered ?? 0).toLocaleString()})</span> / ${EV_TARGET.toLocaleString()}</div>
-                                <div><span style="color:${PD_COLOR};font-weight:600;">PD:</span> <strong>${((pdConfirmed ?? 0) + (pdSelfRostered ?? 0)).toLocaleString()}</strong> <span style="color:${HEYSEN_COLOR};">(Heysen ${(pdHeysen ?? 0).toLocaleString()})</span> <span style="color:#999;">(self ${(pdSelfRostered ?? 0).toLocaleString()})</span> / ${PD_TARGET.toLocaleString()}</div>
+                                <div><span style="color:${EV_COLOR};font-weight:600;">EV:</span> <strong>${((evConfirmed ?? 0) + (evSelfRostered ?? 0)).toLocaleString()}</strong> <span style="color:${HEYSEN_COLOR};">(Heysen ${(evHeysen ?? 0).toLocaleString()})</span> <span style="color:#999;">(self ${(evSelfRostered ?? 0).toLocaleString()})</span> <span style="color:${CAPTAIN_COLOR};">(capt ${(evCaptains ?? 0).toLocaleString()})</span> / ${EV_TARGET.toLocaleString()}</div>
+                                <div><span style="color:${PD_COLOR};font-weight:600;">PD:</span> <strong>${((pdConfirmed ?? 0) + (pdSelfRostered ?? 0)).toLocaleString()}</strong> <span style="color:${HEYSEN_COLOR};">(Heysen ${(pdHeysen ?? 0).toLocaleString()})</span> <span style="color:#999;">(self ${(pdSelfRostered ?? 0).toLocaleString()})</span> <span style="color:${CAPTAIN_COLOR};">(capt ${(pdCaptains ?? 0).toLocaleString()})</span> / ${PD_TARGET.toLocaleString()}</div>
                             </div>
                         </div>
                     </div>
@@ -1408,9 +1449,11 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                     ['PD confirmed', pdConfirmed],
                     ['PD self', pdSelfRostered],
                     ['PD Heysen', pdHeysen],
+                    ['PD captains', pdCaptains],
                     ['EV confirmed', evConfirmed],
                     ['EV self', evSelfRostered],
-                    ['EV Heysen', evHeysen]
+                    ['EV Heysen', evHeysen],
+                    ['EV captains', evCaptains]
                 ];
                 const lines = labels.map(([name, val]) =>
                     val !== null ? `<div style="color:#4caf50;">✓ ${escapeHtml(name)}</div>` : `<div style="color:#999;">${escapeHtml(name)}...</div>`
@@ -1437,8 +1480,8 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                 body.innerHTML = `
                     ${buildRingHtml(segments, grandTotal.toLocaleString())}
                     <div class="gus-roster-count">
-                        <div><span style="color:${EV_COLOR};font-weight:600;">EV:</span> <strong>${evTotal.toLocaleString()}</strong> <span style="color:${HEYSEN_COLOR};">(Heysen ${(evHeysen ?? 0).toLocaleString()})</span> <span style="color:#999;">(self ${(evSelfRostered ?? 0).toLocaleString()})</span> / ${EV_TARGET.toLocaleString()}</div>
-                        <div><span style="color:${PD_COLOR};font-weight:600;">PD:</span> <strong>${pdTotal.toLocaleString()}</strong> <span style="color:${HEYSEN_COLOR};">(Heysen ${(pdHeysen ?? 0).toLocaleString()})</span> <span style="color:#999;">(self ${(pdSelfRostered ?? 0).toLocaleString()})</span> / ${PD_TARGET.toLocaleString()}</div>
+                        <div><span style="color:${EV_COLOR};font-weight:600;">EV:</span> <strong>${evTotal.toLocaleString()}</strong> <span style="color:${HEYSEN_COLOR};">(Heysen ${(evHeysen ?? 0).toLocaleString()})</span> <span style="color:#999;">(self ${(evSelfRostered ?? 0).toLocaleString()})</span> <span style="color:${CAPTAIN_COLOR};">(capt ${(evCaptains ?? 0).toLocaleString()})</span> / ${EV_TARGET.toLocaleString()}</div>
+                        <div><span style="color:${PD_COLOR};font-weight:600;">PD:</span> <strong>${pdTotal.toLocaleString()}</strong> <span style="color:${HEYSEN_COLOR};">(Heysen ${(pdHeysen ?? 0).toLocaleString()})</span> <span style="color:#999;">(self ${(pdSelfRostered ?? 0).toLocaleString()})</span> <span style="color:${CAPTAIN_COLOR};">(capt ${(pdCaptains ?? 0).toLocaleString()})</span> / ${PD_TARGET.toLocaleString()}</div>
                     </div>
                     <div class="gus-roster-legend">
                         <span><span class="gus-dot" style="background:${PD_COLOR};"></span>Polling day</span>
