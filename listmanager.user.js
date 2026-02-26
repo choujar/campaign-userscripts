@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         List Manager Tweaks
 // @namespace    https://github.com/choujar/campaign-userscripts
-// @version      1.30.2
+// @version      1.30.3
 // @description  UX improvements for List Manager and Rocket
 // @author       Sahil Choujar
 // @match        https://listmanager.greens.org.au/*
@@ -1251,7 +1251,7 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                                 </svg>
                                 <span class="gus-roster-pct gus-total-pct">0%</span>
                             </div>
-                            <div class="gus-breakdown-ring-label" style="text-align:center;line-height:1.6;">
+                            <div class="gus-breakdown-ring-label" style="text-align:center;line-height:1.3;">
                                 <div><span style="color:${EV_COLOR};font-weight:600;">EV:</span> <strong>${((evConfirmed ?? 0) + (evSelfRostered ?? 0)).toLocaleString()}</strong> <span style="color:${HEYSEN_COLOR};">(${(evHeysen ?? 0).toLocaleString()})</span> <span style="color:#999;">(${(evSelfRostered ?? 0).toLocaleString()})</span> <span style="color:${CAPTAIN_COLOR};">(${(evCaptains ?? 0).toLocaleString()})</span> / ${EV_TARGET.toLocaleString()}</div>
                                 <div><span style="color:${PD_COLOR};font-weight:600;">PD:</span> <strong>${((pdConfirmed ?? 0) + (pdSelfRostered ?? 0)).toLocaleString()}</strong> <span style="color:${HEYSEN_COLOR};">(${(pdHeysen ?? 0).toLocaleString()})</span> <span style="color:#999;">(${(pdSelfRostered ?? 0).toLocaleString()})</span> <span style="color:${CAPTAIN_COLOR};">(${(pdCaptains ?? 0).toLocaleString()})</span> / ${PD_TARGET.toLocaleString()}</div>
                                 <div style="font-size:11px;color:#888;margin-top:2px;"><span class="gus-dot" style="background:${HEYSEN_COLOR};display:inline-block;width:7px;height:7px;border-radius:50%;"></span> Heysen &nbsp;<span style="color:#999;">Self</span> &nbsp;<span class="gus-dot" style="background:${CAPTAIN_COLOR};display:inline-block;width:7px;height:7px;border-radius:50%;"></span> Capt</div>
@@ -1413,9 +1413,7 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                     setTimeout(() => {
                         fetchOneRoster(buildElectorateTree(id), function(count, err, entities) {
                             loaded++;
-                            if (count !== null) {
-                                results.push({ name, id, count, entities: entities || [] });
-                            }
+                            results.push({ name, id, count: count ?? 0, entities: entities || [] });
                             renderBreakdownRing(results);
                             showStatus(`Loading ${loaded} / ${ordered.length}...`, false, loadingHint);
                             if (loaded >= ordered.length) {
