@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         List Manager Tweaks
 // @namespace    https://github.com/choujar/campaign-userscripts
-// @version      1.32.0
+// @version      1.32.1
 // @description  UX improvements for List Manager and Rocket
 // @author       Sahil Choujar
 // @match        https://listmanager.greens.org.au/*
@@ -1587,6 +1587,12 @@ The election has now been called! We need people to hand out 'How to Vote' cards
 
         // --- Booth Coverage Dashboard ---
 
+        function bcCacheAgeText(ts) {
+            const mins = Math.floor((Date.now() - ts) / 60000);
+            if (mins < 1) return 'just now';
+            return mins === 1 ? '1 min ago' : `${mins} min ago`;
+        }
+
         function fetchBoothRoster(electorateId, callback) {
             let called = false;
             const once = (data, err) => { if (!called) { called = true; callback(data, err); } };
@@ -2122,7 +2128,7 @@ The election has now been called! We need people to hand out 'How to Vote' cards
 
             if (boothCoverageCache && (Date.now() - boothCoverageCache.timestamp) < BC_CACHE_TTL) {
                 renderCoverageTable(boothCoverageCache.results, tableEl, summaryEl);
-                statusEl.innerHTML = `${boothCoverageCache.results.length} electorates loaded \u2014 ${cacheAgeText(boothCoverageCache.timestamp)}`;
+                statusEl.innerHTML = `${boothCoverageCache.results.length} electorates loaded \u2014 ${bcCacheAgeText(boothCoverageCache.timestamp)}`;
                 enableDlAll(boothCoverageCache.results);
                 actionsEl.innerHTML = '<button class="gus-bc-btn gus-bc-refresh-btn">Refresh</button>';
                 actionsEl.querySelector('.gus-bc-refresh-btn').addEventListener('click', () => {
@@ -2164,7 +2170,7 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                                 }
                                 boothCoverageCache = { results: [...results], timestamp: Date.now() };
                                 const warn = authFails > 0 ? ` (${authFails} failed)` : '';
-                                statusEl.innerHTML = `${results.length} electorates loaded${warn} \u2014 ${cacheAgeText(boothCoverageCache.timestamp)}`;
+                                statusEl.innerHTML = `${results.length} electorates loaded${warn} \u2014 ${bcCacheAgeText(boothCoverageCache.timestamp)}`;
                                 enableDlAll(results);
                                 actionsEl.innerHTML = '<button class="gus-bc-btn gus-bc-refresh-btn">Refresh</button>';
                                 actionsEl.querySelector('.gus-bc-refresh-btn').addEventListener('click', () => {
