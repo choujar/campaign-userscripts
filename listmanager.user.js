@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         List Manager Tweaks
 // @namespace    https://github.com/choujar/campaign-userscripts
-// @version      1.31.0
+// @version      1.31.1
 // @description  UX improvements for List Manager and Rocket
 // @author       Sahil Choujar
 // @match        https://listmanager.greens.org.au/*
@@ -712,6 +712,7 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                 font-size: 14px;
                 line-height: 1.6;
             }
+            .gus-bc-sortable:hover { color: #333; background: #f5f5f5; }
             .gus-bc-auth-error a { color: #1565c0; text-decoration: underline; }
             .gus-bc-status {
                 margin-top: 8px;
@@ -1649,11 +1650,11 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                     totalHave += b.slotCoverage[si].have;
                     totalNeed += b.slotCoverage[si].need;
                 }
-                return { totalHave, totalNeed, pct: totalNeed > 0 ? Math.round((totalHave / totalNeed) * 100) : 100 };
+                return { totalHave, totalNeed, pct: totalNeed > 0 ? Math.round((totalHave / totalNeed) * 100) : 0 };
             });
             const grandHave = slotSummaries.reduce((s, v) => s + v.totalHave, 0);
             const grandNeed = slotSummaries.reduce((s, v) => s + v.totalNeed, 0);
-            const overallPct = grandNeed > 0 ? Math.round((grandHave / grandNeed) * 100) : 100;
+            const overallPct = grandNeed > 0 ? Math.round((grandHave / grandNeed) * 100) : 0;
             return { totalBooths, slotSummaries, overallPct };
         }
 
@@ -1698,8 +1699,25 @@ The election has now been called! We need people to hand out 'How to Vote' cards
             if (bcTooltipEl) { bcTooltipEl.remove(); bcTooltipEl = null; }
         }
 
+        let bcSortCol = 'pct';
+        let bcSortAsc = true;
+
+        function bcSortResults(results) {
+            return [...results].sort((a, b) => {
+                let va, vb;
+                if (bcSortCol === 'name') { va = a.name; vb = b.name; return bcSortAsc ? va.localeCompare(vb) : vb.localeCompare(va); }
+                if (bcSortCol === 'booths') { va = a.summary.totalBooths; vb = b.summary.totalBooths; }
+                else if (bcSortCol === 'pct') { va = a.summary.overallPct; vb = b.summary.overallPct; }
+                else if (bcSortCol.startsWith('slot')) {
+                    const si = parseInt(bcSortCol.slice(4));
+                    va = a.summary.slotSummaries[si].pct; vb = b.summary.slotSummaries[si].pct;
+                } else { va = 0; vb = 0; }
+                return bcSortAsc ? va - vb : vb - va;
+            });
+        }
+
         function renderCoverageTable(results, tableEl, statusEl) {
-            const sorted = [...results].sort((a, b) => a.summary.overallPct - b.summary.overallPct);
+            const sorted = bcSortResults(results);
 
             let grandBooths = 0, grandHave = 0, grandNeed = 0;
             for (const r of results) {
@@ -1715,9 +1733,15 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                 statusEl.innerHTML = `${results.length} electorates \u00b7 ${grandBooths} booths \u00b7 <span class="${bcPctClass(grandPct)}">${grandPct}% overall coverage</span>`;
             }
 
-            let html = '<thead><tr><th>Electorate</th><th>Booths</th>';
-            for (const slot of BOOTH_TIME_SLOTS) html += `<th>${slot.label}</th>`;
-            html += '<th>%</th></tr></thead><tbody>';
+            const arrow = (col) => bcSortCol === col ? (bcSortAsc ? ' \u25B2' : ' \u25BC') : '';
+            let html = '<thead><tr>';
+            html += `<th class="gus-bc-sortable" data-col="name" style="cursor:pointer;">Electorate${arrow('name')}</th>`;
+            html += `<th class="gus-bc-sortable" data-col="booths" style="cursor:pointer;">Booths${arrow('booths')}</th>`;
+            BOOTH_TIME_SLOTS.forEach((slot, si) => {
+                html += `<th class="gus-bc-sortable" data-col="slot${si}" style="cursor:pointer;">${slot.label}${arrow('slot' + si)}</th>`;
+            });
+            html += `<th class="gus-bc-sortable" data-col="pct" style="cursor:pointer;">%${arrow('pct')}</th>`;
+            html += '</tr></thead><tbody>';
 
             for (const r of sorted) {
                 const s = r.summary;
@@ -1735,6 +1759,16 @@ The election has now been called! We need people to hand out 'How to Vote' cards
             }
             html += '</tbody>';
             tableEl.innerHTML = html;
+
+            tableEl.querySelectorAll('.gus-bc-sortable').forEach(th => {
+                th.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const col = th.dataset.col;
+                    if (bcSortCol === col) { bcSortAsc = !bcSortAsc; }
+                    else { bcSortCol = col; bcSortAsc = true; }
+                    renderCoverageTable(results, tableEl, statusEl);
+                });
+            });
 
             tableEl.querySelectorAll('.gus-bc-row').forEach(row => {
                 row.addEventListener('click', () => {
@@ -1769,8 +1803,8 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                         }
                         const boothPct = booth.peopleRequired > 0
                             ? Math.round(booth.slotCoverage.reduce((s, c) => s + Math.min(c.have, c.need), 0) / (booth.peopleRequired * BOOTH_TIME_SLOTS.length) * 100)
-                            : 100;
-                        cells += `<td class="gus-bc-pct ${bcPctClass(boothPct)}">${boothPct}%</td>`;
+                            : 0;
+                        cells += `<td class="gus-bc-pct ${bcPctClass(boothPct)}">${booth.peopleRequired > 0 ? boothPct + '%' : '\u2014'}</td>`;
                         tr.innerHTML = cells;
 
                         tr.querySelectorAll('.gus-bc-slot[data-bid]').forEach(span => {
@@ -1834,30 +1868,31 @@ The election has now been called! We need people to hand out 'How to Vote' cards
 
             const results = [];
             let loaded = 0;
-            let aborted = false;
+            let authFails = 0;
             const ordered = ALL_ELECTORATES;
 
             ordered.forEach(([name, id], i) => {
                 setTimeout(() => {
-                    if (aborted) return;
                     fetchBoothRoster(id, function(data, err) {
-                        if (aborted) return;
                         loaded++;
                         if (err === 'not_logged_in') {
-                            aborted = true;
-                            statusEl.innerHTML = '';
-                            tableEl.innerHTML = '';
-                            summaryEl.innerHTML = `<div class="gus-bc-auth-error">Not logged into Rocket.<br>Open <a href="https://contact-sa.greens.org.au" target="_blank">contact-sa.greens.org.au</a> in another tab, log in, then try again.</div>`;
-                            return;
+                            authFails++;
+                        } else {
+                            const booths = data ? parseElectionDayBooths(data) : [];
+                            const summary = computeElectorateSummary(booths);
+                            results.push({ name, id, booths, summary });
+                            renderCoverageTable(results, tableEl, summaryEl);
                         }
-                        const booths = data ? parseElectionDayBooths(data) : [];
-                        const summary = computeElectorateSummary(booths);
-                        results.push({ name, id, booths, summary });
-                        renderCoverageTable(results, tableEl, summaryEl);
                         statusEl.textContent = `Loading ${loaded} / ${ordered.length}...`;
                         if (loaded >= ordered.length) {
+                            if (results.length === 0 && authFails > 0) {
+                                statusEl.innerHTML = '';
+                                summaryEl.innerHTML = `<div class="gus-bc-auth-error">Not logged into Rocket.<br>Open <a href="https://contact-sa.greens.org.au" target="_blank">contact-sa.greens.org.au</a> in another tab, log in, then try again.</div>`;
+                                return;
+                            }
                             boothCoverageCache = { results: [...results], timestamp: Date.now() };
-                            statusEl.innerHTML = `${ordered.length} electorates loaded \u2014 ${cacheAgeText(boothCoverageCache.timestamp)}`;
+                            const warn = authFails > 0 ? ` (${authFails} failed)` : '';
+                            statusEl.innerHTML = `${results.length} electorates loaded${warn} \u2014 ${cacheAgeText(boothCoverageCache.timestamp)}`;
                             actionsEl.innerHTML = '<button class="gus-bc-btn gus-bc-refresh-btn">Refresh</button>';
                             actionsEl.querySelector('.gus-bc-refresh-btn').addEventListener('click', () => {
                                 boothCoverageCache = null;
@@ -1911,8 +1946,15 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                         <span><span class="gus-dot" style="background:#999;"></span>Self</span>
                         <span><span class="gus-dot" style="background:${CAPTAIN_COLOR};"></span>Capt</span>
                     </div>
+                    <button class="gus-bc-btn" style="margin-top:6px;" title="Booth Coverage Dashboard">Booth Coverage</button>
                 `;
                 attachRingHover(widget);
+
+                const bcBtn = body.querySelector('.gus-bc-btn');
+                if (bcBtn && !bcBtn.dataset.gusClick) {
+                    bcBtn.dataset.gusClick = '1';
+                    bcBtn.addEventListener('click', () => openBoothCoverageModal());
+                }
 
                 const ring = widget.querySelector('.gus-roster-ring');
                 if (ring && !ring.dataset.gusClick) {
@@ -1952,7 +1994,6 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                 <div style="display:flex;align-items:center;gap:6px;">
                     <span class="gus-roster-title">Roster progress</span>
                     <button class="gus-roster-refresh" title="Refresh">&#x21bb;</button>
-                    <button class="gus-bc-btn" title="Booth Coverage Dashboard">Booths</button>
                 </div>
                 <div class="gus-roster-body">
                     <span class="gus-roster-loading">Waiting for auth...</span>
@@ -1961,10 +2002,6 @@ The election has now been called! We need people to hand out 'How to Vote' cards
 
             widget.querySelector('.gus-roster-refresh').addEventListener('click', () => {
                 fetchRosterCount();
-            });
-
-            widget.querySelector('.gus-bc-btn').addEventListener('click', () => {
-                openBoothCoverageModal();
             });
 
             // Insert before the stats container (to the left)
