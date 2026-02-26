@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         List Manager Tweaks
 // @namespace    https://github.com/choujar/campaign-userscripts
-// @version      1.30.3
+// @version      1.30.4
 // @description  UX improvements for List Manager and Rocket
 // @author       Sahil Choujar
 // @match        https://listmanager.greens.org.au/*
@@ -428,10 +428,7 @@ The election has now been called! We need people to hand out 'How to Vote' cards
             .gus-roster-count {
                 font-size: 12px;
                 color: #666;
-                display: flex;
-                flex-direction: column;
-                align-items: center;
-                gap: 1px;
+                text-align: center;
                 width: 100%;
             }
             .gus-roster-count strong {
@@ -1479,7 +1476,7 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                         <span><span class="gus-dot" style="background:${PD_COLOR};"></span>PD</span>
                         <span><span class="gus-dot" style="background:${EV_COLOR};"></span>EV</span>
                         <span><span class="gus-dot" style="background:${HEYSEN_COLOR};"></span>Heysen</span>
-                        <span style="color:#999;">Self</span>
+                        <span><span class="gus-dot" style="background:#999;"></span>Self</span>
                         <span><span class="gus-dot" style="background:${CAPTAIN_COLOR};"></span>Capt</span>
                     </div>
                 `;
