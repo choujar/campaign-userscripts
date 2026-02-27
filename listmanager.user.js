@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         List Manager Tweaks
 // @namespace    https://github.com/choujar/campaign-userscripts
-// @version      1.32.1
+// @version      1.33.0
 // @description  UX improvements for List Manager and Rocket
 // @author       Sahil Choujar
 // @match        https://listmanager.greens.org.au/*
@@ -1630,8 +1630,14 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                 .map(b => {
                     const info = b.info;
                     const pr = info.people_required;
-                    const needKnown = pr !== null && pr !== undefined && pr !== '';
-                    const need = needKnown ? parseInt(pr) : -1;
+                    let need;
+                    if (pr !== null && pr !== undefined && pr !== '') {
+                        need = parseFloat(pr);
+                    } else if (info.est_total) {
+                        need = Math.round(parseInt(info.est_total) / 1000);
+                    } else {
+                        need = 2;
+                    }
                     const slotCoverage = BOOTH_TIME_SLOTS.map(slotDef => {
                         const covering = (b.slots || []).filter(vol => {
                             const vs = parseInt(vol.time_start);
@@ -1665,20 +1671,17 @@ The election has now been called! We need people to hand out 'How to Vote' cards
         function computeElectorateSummary(booths) {
             const totalBooths = booths.length;
             const slotSummaries = BOOTH_TIME_SLOTS.map((_, si) => {
-                let totalHave = 0, totalNeed = 0, allHave = 0;
+                let totalHave = 0, totalNeed = 0;
                 for (const b of booths) {
-                    allHave += b.slotCoverage[si].have;
-                    if (b.slotCoverage[si].need < 0) continue;
                     totalHave += b.slotCoverage[si].have;
                     totalNeed += b.slotCoverage[si].need;
                 }
-                return { totalHave, totalNeed, allHave, pct: totalNeed > 0 ? Math.round((totalHave / totalNeed) * 100) : 0 };
+                return { totalHave, totalNeed, pct: totalNeed > 0 ? Math.round((totalHave / totalNeed) * 100) : 0 };
             });
             const grandHave = slotSummaries.reduce((s, v) => s + v.totalHave, 0);
             const grandNeed = slotSummaries.reduce((s, v) => s + v.totalNeed, 0);
             const overallPct = grandNeed > 0 ? Math.round((grandHave / grandNeed) * 100) : 0;
-            const hasAnyKnownNeed = grandNeed > 0;
-            return { totalBooths, slotSummaries, overallPct, hasAnyKnownNeed };
+            return { totalBooths, slotSummaries, overallPct };
         }
 
         function bcSlotClass(have, need) {
@@ -1704,7 +1707,7 @@ The election has now been called! We need people to hand out 'How to Vote' cards
         };
 
         function bcSlotColors(have, need) {
-            if (need < 0) return have > 0 ? BC_COLORS.unknown : BC_COLORS.none;
+            if (need <= 0) return BC_COLORS.none;
             if (need === 0) return BC_COLORS.none;
             if (have >= need) return BC_COLORS.full;
             if (have > 0) return BC_COLORS.partial;
@@ -1837,19 +1840,9 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                 ];
                 for (let si = 0; si < BOOTH_TIME_SLOTS.length; si++) {
                     const ss = s.slotSummaries[si];
-                    if (ss.totalNeed > 0) {
-                        cells.push({ text: `${ss.totalHave}/${ss.totalNeed}`, badge: true, colors: bcSlotColors(ss.totalHave, ss.totalNeed) });
-                    } else if (ss.allHave > 0) {
-                        cells.push({ text: String(ss.allHave), badge: true, colors: BC_COLORS.unknown });
-                    } else {
-                        cells.push({ text: '\u00b7', align: 'center', color: '#ccc' });
-                    }
+                    cells.push({ text: `${ss.totalHave}/${ss.totalNeed}`, badge: true, colors: bcSlotColors(ss.totalHave, ss.totalNeed) });
                 }
-                if (s.hasAnyKnownNeed) {
-                    cells.push({ text: s.overallPct + '%', align: 'right', bold: true, color: bcPctColor(s.overallPct) });
-                } else {
-                    cells.push({ text: '\u2014', align: 'center', color: '#999' });
-                }
+                cells.push({ text: s.overallPct + '%', align: 'right', bold: true, color: bcPctColor(s.overallPct) });
                 rows.push({ cells });
             }
             const canvas = bcDrawTableToCanvas('Booth Coverage \u2014 Election Day', headers, rows);
@@ -1865,35 +1858,22 @@ The election has now been called! We need people to hand out 'How to Vote' cards
             const rows = [];
             for (const booth of booths) {
                 const stars = PRIORITY_STARS[booth.priority] || '\u2605';
-                const isUnknown = booth.peopleRequired < 0;
                 const cells = [
                     { text: stars + ' ' + booth.name, color: '#333' },
-                    { text: isUnknown ? '\u2014' : String(booth.peopleRequired), align: 'center', color: '#999' }
+                    { text: String(booth.peopleRequired), align: 'center', color: '#999' }
                 ];
                 for (let si = 0; si < BOOTH_TIME_SLOTS.length; si++) {
                     const sc = booth.slotCoverage[si];
-                    if (isUnknown) {
-                        if (sc.have > 0) {
-                            cells.push({ text: String(sc.have), badge: true, colors: BC_COLORS.unknown });
-                        } else {
-                            cells.push({ text: '\u00b7', align: 'center', color: '#ccc' });
-                        }
+                    if (sc.need === 0) {
+                        cells.push({ text: '\u00b7', align: 'center', color: '#ccc' });
                     } else {
-                        if (sc.need === 0) {
-                            cells.push({ text: '\u00b7', align: 'center', color: '#ccc' });
-                        } else {
-                            cells.push({ text: `${sc.have}/${sc.need}`, badge: true, colors: bcSlotColors(sc.have, sc.need) });
-                        }
+                        cells.push({ text: `${sc.have}/${sc.need}`, badge: true, colors: bcSlotColors(sc.have, sc.need) });
                     }
                 }
-                if (isUnknown) {
-                    cells.push({ text: '\u2014', align: 'center', color: '#999' });
-                } else {
-                    const pct = booth.peopleRequired > 0
-                        ? Math.round(booth.slotCoverage.reduce((s, c) => s + Math.min(c.have, c.need), 0) / (booth.peopleRequired * BOOTH_TIME_SLOTS.length) * 100)
-                        : 0;
-                    cells.push({ text: pct + '%', align: 'right', bold: true, color: bcPctColor(pct) });
-                }
+                const pct = booth.peopleRequired > 0
+                    ? Math.round(booth.slotCoverage.reduce((s, c) => s + Math.min(c.have, c.need), 0) / (booth.peopleRequired * BOOTH_TIME_SLOTS.length) * 100)
+                    : 0;
+                cells.push({ text: pct + '%', align: 'right', bold: true, color: bcPctColor(pct) });
                 rows.push({ cells });
             }
             const canvas = bcDrawTableToCanvas('Booth Coverage \u2014 ' + electorate.name, headers, rows);
@@ -1979,20 +1959,10 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                 html += `<td>${s.totalBooths}</td>`;
                 for (let si = 0; si < BOOTH_TIME_SLOTS.length; si++) {
                     const ss = s.slotSummaries[si];
-                    if (ss.totalNeed > 0) {
-                        const cls = bcSlotClass(ss.totalHave, ss.totalNeed);
-                        html += `<td><span class="gus-bc-slot ${cls}">${ss.totalHave}/${ss.totalNeed}</span></td>`;
-                    } else if (ss.allHave > 0) {
-                        html += `<td><span class="gus-bc-slot gus-bc-slot-unknown">${ss.allHave}</span></td>`;
-                    } else {
-                        html += `<td><span class="gus-bc-slot gus-bc-slot-none">\u00b7</span></td>`;
-                    }
+                    const cls = bcSlotClass(ss.totalHave, ss.totalNeed);
+                    html += `<td><span class="gus-bc-slot ${cls}">${ss.totalHave}/${ss.totalNeed}</span></td>`;
                 }
-                if (s.hasAnyKnownNeed) {
-                    html += `<td class="gus-bc-pct ${bcPctClass(s.overallPct)}">${s.overallPct}%</td>`;
-                } else {
-                    html += `<td class="gus-bc-pct">\u2014</td>`;
-                }
+                html += `<td class="gus-bc-pct ${bcPctClass(s.overallPct)}">${s.overallPct}%</td>`;
                 html += '</tr>';
             }
             html += '</tbody>';
@@ -2045,29 +2015,17 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                         tr.className = 'gus-bc-booth-row';
                         tr.dataset.parent = eid;
                         let cells = `<td><span class="gus-bc-priority">${PRIORITY_STARS[booth.priority] || '\u2605'}</span>${escapeHtml(booth.name)}</td>`;
-                        cells += `<td style="font-size:10px;color:#999;" title="${escapeHtml(booth.premises || '')}">${booth.peopleRequired < 0 ? '\u2014' : booth.peopleRequired}</td>`;
-                        const isUnknownNeed = booth.peopleRequired < 0;
+                        cells += `<td style="font-size:10px;color:#999;" title="${escapeHtml(booth.premises || '')}">${booth.peopleRequired}</td>`;
                         for (let si = 0; si < BOOTH_TIME_SLOTS.length; si++) {
                             const sc = booth.slotCoverage[si];
-                            if (isUnknownNeed) {
-                                const label = sc.have === 0 ? '\u00b7' : String(sc.have);
-                                const cls = sc.have > 0 ? 'gus-bc-slot-unknown' : 'gus-bc-slot-none';
-                                cells += `<td><span class="gus-bc-slot ${cls}" data-si="${si}" data-bid="${booth.id}">${label}</span></td>`;
-                            } else {
-                                const cls = bcSlotClass(sc.have, sc.need);
-                                const label = sc.need === 0 ? '\u00b7' : `${sc.have}/${sc.need}`;
-                                cells += `<td><span class="gus-bc-slot ${cls}" data-si="${si}" data-bid="${booth.id}">${label}</span></td>`;
-                            }
+                            const cls = bcSlotClass(sc.have, sc.need);
+                            const label = sc.need === 0 ? '\u00b7' : `${sc.have}/${sc.need}`;
+                            cells += `<td><span class="gus-bc-slot ${cls}" data-si="${si}" data-bid="${booth.id}">${label}</span></td>`;
                         }
-                        let boothPctLabel;
-                        if (isUnknownNeed) {
-                            boothPctLabel = '\u2014';
-                        } else {
-                            const boothPct = booth.peopleRequired > 0
-                                ? Math.round(booth.slotCoverage.reduce((s, c) => s + Math.min(c.have, c.need), 0) / (booth.peopleRequired * BOOTH_TIME_SLOTS.length) * 100)
-                                : 0;
-                            boothPctLabel = `<span class="${bcPctClass(boothPct)}">${boothPct}%</span>`;
-                        }
+                        const boothPct = booth.peopleRequired > 0
+                            ? Math.round(booth.slotCoverage.reduce((s, c) => s + Math.min(c.have, c.need), 0) / (booth.peopleRequired * BOOTH_TIME_SLOTS.length) * 100)
+                            : 0;
+                        const boothPctLabel = `<span class="${bcPctClass(boothPct)}">${boothPct}%</span>`;
                         cells += `<td class="gus-bc-pct">${boothPctLabel}</td>`;
                         tr.innerHTML = cells;
 
