@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         List Manager Tweaks
 // @namespace    https://github.com/choujar/campaign-userscripts
-// @version      1.35.0
+// @version      1.36.0
 // @description  UX improvements for List Manager and Rocket
 // @author       Sahil Choujar
 // @match        https://listmanager.greens.org.au/*
@@ -476,7 +476,7 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                 display: inline-block;
                 flex-shrink: 0;
             }
-            .gus-breakdown-overlay {
+            .gus-breakdown-overlay, .gus-bc-overlay {
                 position: fixed;
                 top: 0; left: 0; right: 0; bottom: 0;
                 background: rgba(0,0,0,0.5);
@@ -1030,7 +1030,9 @@ The election has now been called! We need people to hand out 'How to Vote' cards
         const CAPTAIN_COLOR = '#e65100';
         let rosterLoading = false;
         let breakdownCache = null; // { results: [...], timestamp: Date.now() }
+        let breakdownLoading = null; // { results: [], loaded: 0, total: 0, callbacks: [] }
         let boothCoverageCache = null; // { results: [...], timestamp: Date.now() }
+        let bcLoading = null; // { results: [], loaded: 0, total: 0, authFails: 0, callbacks: [] }
         let rosterError = null;
 
         const ALL_ELECTORATES = [
@@ -1530,7 +1532,8 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                 if (showRefresh) {
                     statusEl.querySelector('.gus-breakdown-refresh').addEventListener('click', () => {
                         breakdownCache = null;
-                        fetchAllElectorates();
+                        startBreakdownFetch();
+                        breakdownLoading.callbacks.push(onBreakdownProgress);
                     });
                     statusEl.querySelector('.gus-breakdown-download').addEventListener('click', downloadFullData);
                 }
@@ -1552,41 +1555,51 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                 URL.revokeObjectURL(a.href);
             }
 
-            function fetchAllElectorates() {
-                const results = [];
-                let loaded = 0;
-                const ordered = getPrioritisedElectorates();
+            function onBreakdownProgress(state) {
+                renderBreakdownRing(state.results);
                 const loadingHint = 'You can close this and come back — data loads in the background';
-                showStatus(`Loading 0 / ${ordered.length}...`, false, loadingHint);
-                updateTotalRing();
+                if (state.loaded >= state.total) {
+                    showStatus(`${state.total} electorates loaded — ${cacheAgeText(breakdownCache.timestamp)}`, true);
+                } else {
+                    showStatus(`Loading ${state.loaded} / ${state.total}...`, false, loadingHint);
+                }
+            }
+
+            function startBreakdownFetch() {
+                const ordered = getPrioritisedElectorates();
+                breakdownLoading = { results: [], loaded: 0, total: ordered.length, callbacks: [] };
+                const state = breakdownLoading;
 
                 ordered.forEach(([name, id], i) => {
                     setTimeout(() => {
                         fetchOneRoster(buildElectorateTree(id), function(count, err, entities) {
-                            loaded++;
-                            results.push({ name, id, count: count ?? 0, entities: entities || [] });
-                            renderBreakdownRing(results);
-                            showStatus(`Loading ${loaded} / ${ordered.length}...`, false, loadingHint);
-                            if (loaded >= ordered.length) {
-                                saveElectorateOrder(results);
-                                breakdownCache = { results: [...results], timestamp: Date.now() };
-                                showStatus(`${ordered.length} electorates loaded — ${cacheAgeText(breakdownCache.timestamp)}`, true);
+                            state.loaded++;
+                            state.results.push({ name, id, count: count ?? 0, entities: entities || [] });
+                            for (const cb of state.callbacks) cb(state);
+                            if (state.loaded >= state.total) {
+                                saveElectorateOrder(state.results);
+                                breakdownCache = { results: [...state.results], timestamp: Date.now() };
+                                breakdownLoading = null;
+                                for (const cb of state.callbacks) cb(state);
                             }
                         });
-                    }, i * 100);
+                    }, i * 40);
                 });
             }
 
             // Show progress ring immediately (pdConfirmed already known)
             updateTotalRing();
 
-            // Use cache if fresh (< 30 min), otherwise fetch
             const CACHE_TTL = 30 * 60 * 1000;
             if (breakdownCache && (Date.now() - breakdownCache.timestamp) < CACHE_TTL) {
                 renderBreakdownRing(breakdownCache.results);
                 showStatus(`${ALL_ELECTORATES.length} electorates loaded — ${cacheAgeText(breakdownCache.timestamp)}`, true);
+            } else if (breakdownLoading) {
+                onBreakdownProgress(breakdownLoading);
+                breakdownLoading.callbacks.push(onBreakdownProgress);
             } else {
-                fetchAllElectorates();
+                startBreakdownFetch();
+                breakdownLoading.callbacks.push(onBreakdownProgress);
             }
         }
 
@@ -1981,6 +1994,8 @@ The election has now been called! We need people to hand out 'How to Vote' cards
             });
         }
 
+        let bcExpandedEids = new Set();
+
         function renderCoverageTable(results, tableEl, statusEl) {
             const sorted = bcSortResults(results);
 
@@ -2063,6 +2078,61 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                 btn.addEventListener('mouseleave', () => { btn.style.opacity = '0.3'; });
             });
 
+            function expandElectorateRow(row, sorted) {
+                const eid = row.dataset.eid;
+                row.classList.add('gus-bc-row-expanded');
+                bcExpandedEids.add(eid);
+                const electorate = sorted.find(r => String(r.id) === eid);
+                if (!electorate) return;
+
+                const edBooths = electorate.booths.filter(b => !b.isPrepoll).sort((a, b) => {
+                    if (b.priority !== a.priority) return b.priority - a.priority;
+                    return a.name.localeCompare(b.name);
+                });
+                const ppBooths = electorate.booths.filter(b => b.isPrepoll).sort((a, b) => a.name.localeCompare(b.name));
+                const booths = [...edBooths, ...ppBooths];
+
+                const frag = document.createDocumentFragment();
+                for (const booth of booths) {
+                    const tr = document.createElement('tr');
+                    tr.className = 'gus-bc-booth-row';
+                    tr.dataset.parent = eid;
+                    const ppTag = booth.isPrepoll ? `<span class="gus-bc-pp-tag">PP</span> ` : '';
+                    const ppDays = booth.isPrepoll ? ` <span style="color:#aaa;font-size:9px;">${booth.prepollDays}d</span>` : '';
+                    const starLabel = booth.isPrepoll ? '' : `<span class="gus-bc-priority">${PRIORITY_STARS[booth.priority] || '\u2605'}</span>`;
+                    let cells = `<td>${starLabel}${ppTag}${escapeHtml(booth.name)}${ppDays}</td>`;
+                    const needLabel = booth.isPrepoll
+                        ? `<span title="${booth.prepollDays} days × ${Math.round(booth.peopleRequired / booth.prepollDays)}/day">${booth.peopleRequired}</span>`
+                        : String(booth.peopleRequired);
+                    cells += `<td style="font-size:10px;color:#999;" title="${escapeHtml(booth.premises || '')}">${needLabel}</td>`;
+                    for (let si = 0; si < BOOTH_TIME_SLOTS.length; si++) {
+                        const sc = booth.slotCoverage[si];
+                        const cls = bcSlotClass(sc.have, sc.need);
+                        const label = sc.need === 0 ? '\u00b7' : `${sc.have}/${sc.need}`;
+                        cells += `<td><span class="gus-bc-slot ${cls}" data-si="${si}" data-bid="${booth.id}">${label}</span></td>`;
+                    }
+                    const boothPct = booth.peopleRequired > 0
+                        ? Math.min(100, Math.round(booth.slotCoverage.reduce((s, c) => s + Math.min(c.have, c.need), 0) / (booth.peopleRequired * BOOTH_TIME_SLOTS.length) * 100))
+                        : 100;
+                    const boothPctLabel = `<span class="${bcPctClass(boothPct)}">${boothPct}%</span>`;
+                    cells += `<td class="gus-bc-pct">${boothPctLabel}</td>`;
+                    tr.innerHTML = cells;
+
+                    tr.querySelectorAll('.gus-bc-slot[data-bid]').forEach(span => {
+                        const si = parseInt(span.dataset.si);
+                        const bid = span.dataset.bid;
+                        const b = booths.find(x => x.id === bid);
+                        if (b) {
+                            span.addEventListener('mouseenter', (e) => showBcTooltip(e, b.slotCoverage[si].volunteers));
+                            span.addEventListener('mouseleave', hideBcTooltip);
+                        }
+                    });
+
+                    frag.appendChild(tr);
+                }
+                row.after(frag);
+            }
+
             tableEl.querySelectorAll('.gus-bc-row').forEach(row => {
                 row.addEventListener('click', () => {
                     const eid = row.dataset.eid;
@@ -2070,61 +2140,49 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                     if (existing.length > 0) {
                         existing.forEach(el => el.remove());
                         row.classList.remove('gus-bc-row-expanded');
+                        bcExpandedEids.delete(eid);
                         return;
                     }
-                    row.classList.add('gus-bc-row-expanded');
-                    const electorate = sorted.find(r => String(r.id) === eid);
-                    if (!electorate) return;
-                    console.log(`[GUS] ${electorate.name} — raw API data:`, electorate._raw);
-                    console.log(`[GUS] ${electorate.name} — parsed booths:`, electorate.booths);
-
-                    const edBooths = electorate.booths.filter(b => !b.isPrepoll).sort((a, b) => {
-                        if (b.priority !== a.priority) return b.priority - a.priority;
-                        return a.name.localeCompare(b.name);
-                    });
-                    const ppBooths = electorate.booths.filter(b => b.isPrepoll).sort((a, b) => a.name.localeCompare(b.name));
-                    const booths = [...edBooths, ...ppBooths];
-
-                    const frag = document.createDocumentFragment();
-                    for (const booth of booths) {
-                        const tr = document.createElement('tr');
-                        tr.className = 'gus-bc-booth-row';
-                        tr.dataset.parent = eid;
-                        const ppTag = booth.isPrepoll ? `<span class="gus-bc-pp-tag">PP</span> ` : '';
-                        const ppDays = booth.isPrepoll ? ` <span style="color:#aaa;font-size:9px;">${booth.prepollDays}d</span>` : '';
-                        const starLabel = booth.isPrepoll ? '' : `<span class="gus-bc-priority">${PRIORITY_STARS[booth.priority] || '\u2605'}</span>`;
-                        let cells = `<td>${starLabel}${ppTag}${escapeHtml(booth.name)}${ppDays}</td>`;
-                        const needLabel = booth.isPrepoll
-                            ? `<span title="${booth.prepollDays} days × ${Math.round(booth.peopleRequired / booth.prepollDays)}/day">${booth.peopleRequired}</span>`
-                            : String(booth.peopleRequired);
-                        cells += `<td style="font-size:10px;color:#999;" title="${escapeHtml(booth.premises || '')}">${needLabel}</td>`;
-                        for (let si = 0; si < BOOTH_TIME_SLOTS.length; si++) {
-                            const sc = booth.slotCoverage[si];
-                            const cls = bcSlotClass(sc.have, sc.need);
-                            const label = sc.need === 0 ? '\u00b7' : `${sc.have}/${sc.need}`;
-                            cells += `<td><span class="gus-bc-slot ${cls}" data-si="${si}" data-bid="${booth.id}">${label}</span></td>`;
-                        }
-                        const boothPct = booth.peopleRequired > 0
-                            ? Math.min(100, Math.round(booth.slotCoverage.reduce((s, c) => s + Math.min(c.have, c.need), 0) / (booth.peopleRequired * BOOTH_TIME_SLOTS.length) * 100))
-                            : 100;
-                        const boothPctLabel = `<span class="${bcPctClass(boothPct)}">${boothPct}%</span>`;
-                        cells += `<td class="gus-bc-pct">${boothPctLabel}</td>`;
-                        tr.innerHTML = cells;
-
-                        tr.querySelectorAll('.gus-bc-slot[data-bid]').forEach(span => {
-                            const si = parseInt(span.dataset.si);
-                            const bid = span.dataset.bid;
-                            const b = booths.find(x => x.id === bid);
-                            if (b) {
-                                span.addEventListener('mouseenter', (e) => showBcTooltip(e, b.slotCoverage[si].volunteers));
-                                span.addEventListener('mouseleave', hideBcTooltip);
-                            }
-                        });
-
-                        frag.appendChild(tr);
-                    }
-                    row.after(frag);
+                    expandElectorateRow(row, sorted);
                 });
+            });
+
+            // Re-expand previously expanded rows
+            for (const eid of bcExpandedEids) {
+                const row = tableEl.querySelector(`.gus-bc-row[data-eid="${eid}"]`);
+                if (row) expandElectorateRow(row, sorted);
+            }
+        }
+
+        function startBcFetch() {
+            const ordered = ALL_ELECTORATES;
+            bcLoading = { results: [], loaded: 0, total: ordered.length, authFails: 0, callbacks: [] };
+            const state = bcLoading;
+
+            ordered.forEach(([name, id], i) => {
+                setTimeout(() => {
+                    fetchBoothRoster(id, function(data, err) {
+                        state.loaded++;
+                        if (err === 'not_logged_in') {
+                            state.authFails++;
+                        } else {
+                            try {
+                                const booths = data ? parseBooths(data) : [];
+                                const summary = computeElectorateSummary(booths);
+                                state.results.push({ name, id, booths, summary, _raw: data });
+                            } catch (e) {
+                                console.error('[GUS] Error parsing', name, ':', e);
+                            }
+                        }
+                        if (state.loaded >= state.total) {
+                            if (state.results.length > 0 || state.authFails === 0) {
+                                boothCoverageCache = { results: [...state.results], timestamp: Date.now() };
+                            }
+                            bcLoading = null;
+                        }
+                        for (const cb of state.callbacks) cb(state);
+                    });
+                }, i * 40);
             });
         }
 
@@ -2132,7 +2190,7 @@ The election has now been called! We need people to hand out 'How to Vote' cards
             if (document.querySelector('.gus-bc-overlay')) return;
 
             const overlay = document.createElement('div');
-            overlay.className = 'gus-breakdown-overlay gus-bc-overlay';
+            overlay.className = 'gus-bc-overlay';
             overlay.addEventListener('click', (e) => { if (e.target === overlay) { hideBcTooltip(); overlay.remove(); } });
 
             const popup = document.createElement('div');
@@ -2166,66 +2224,58 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                 dlAllBtn.addEventListener('click', (e) => { e.stopPropagation(); bcExportOverview(data); });
             }
 
-            if (boothCoverageCache && (Date.now() - boothCoverageCache.timestamp) < BC_CACHE_TTL) {
-                renderCoverageTable(boothCoverageCache.results, tableEl, summaryEl);
-                statusEl.innerHTML = `${boothCoverageCache.results.length} electorates loaded \u2014 ${bcCacheAgeText(boothCoverageCache.timestamp)}`;
-                enableDlAll(boothCoverageCache.results);
+            function addRefreshBtn(data) {
                 actionsEl.innerHTML = '<button class="gus-bc-btn gus-bc-refresh-btn">Refresh</button>';
                 actionsEl.querySelector('.gus-bc-refresh-btn').addEventListener('click', () => {
                     boothCoverageCache = null;
                     overlay.remove();
+                    startBcFetch();
                     openBoothCoverageModal();
                 });
-                return;
             }
 
-            const results = [];
-            let loaded = 0;
-            let authFails = 0;
-            const ordered = ALL_ELECTORATES;
+            function showComplete(results, timestamp) {
+                renderCoverageTable(results, tableEl, summaryEl);
+                statusEl.innerHTML = `${results.length} electorates loaded \u2014 ${bcCacheAgeText(timestamp)}`;
+                enableDlAll(results);
+                addRefreshBtn(results);
+            }
 
-            ordered.forEach(([name, id], i) => {
-                setTimeout(() => {
-                    fetchBoothRoster(id, function(data, err) {
-                        loaded++;
-                        if (err === 'not_logged_in') {
-                            authFails++;
-                        } else {
-                            try {
-                                const booths = data ? parseBooths(data) : [];
-                                const summary = computeElectorateSummary(booths);
-                                results.push({ name, id, booths, summary, _raw: data });
-                                renderCoverageTable(results, tableEl, summaryEl);
-                            } catch (e) {
-                                console.error('[GUS] Error parsing', name, ':', e);
-                            }
-                        }
-                        statusEl.textContent = `Loading ${loaded} / ${ordered.length}...`;
-                        if (loaded >= ordered.length) {
-                            try {
-                                if (results.length === 0 && authFails > 0) {
-                                    statusEl.innerHTML = '';
-                                    summaryEl.innerHTML = `<div class="gus-bc-auth-error">Not logged into Rocket.<br>Open <a href="https://contact-sa.greens.org.au" target="_blank">contact-sa.greens.org.au</a> in another tab, log in, then try again.</div>`;
-                                    return;
-                                }
-                                boothCoverageCache = { results: [...results], timestamp: Date.now() };
-                                const warn = authFails > 0 ? ` (${authFails} failed)` : '';
-                                statusEl.innerHTML = `${results.length} electorates loaded${warn} \u2014 ${bcCacheAgeText(boothCoverageCache.timestamp)}`;
-                                enableDlAll(results);
-                                actionsEl.innerHTML = '<button class="gus-bc-btn gus-bc-refresh-btn">Refresh</button>';
-                                actionsEl.querySelector('.gus-bc-refresh-btn').addEventListener('click', () => {
-                                    boothCoverageCache = null;
-                                    overlay.remove();
-                                    openBoothCoverageModal();
-                                });
-                            } catch (e) {
-                                console.error('[GUS] Error completing load:', e);
-                                statusEl.textContent = `${results.length} electorates loaded (with errors)`;
-                            }
-                        }
-                    });
-                }, i * 100);
-            });
+            let bcRenderScheduled = false;
+            function onBcProgress(state) {
+                if (!overlay.isConnected) return;
+                if (state.loaded >= state.total) {
+                    renderCoverageTable(state.results, tableEl, summaryEl);
+                    if (state.results.length === 0 && state.authFails > 0) {
+                        statusEl.innerHTML = '';
+                        summaryEl.innerHTML = `<div class="gus-bc-auth-error">Not logged into Rocket.<br>Open <a href="https://contact-sa.greens.org.au" target="_blank">contact-sa.greens.org.au</a> in another tab, log in, then try again.</div>`;
+                        return;
+                    }
+                    const warn = state.authFails > 0 ? ` (${state.authFails} failed)` : '';
+                    statusEl.innerHTML = `${state.results.length} electorates loaded${warn} \u2014 ${bcCacheAgeText(boothCoverageCache ? boothCoverageCache.timestamp : Date.now())}`;
+                    enableDlAll(state.results);
+                    addRefreshBtn(state.results);
+                } else {
+                    statusEl.textContent = `Loading ${state.loaded} / ${state.total}...`;
+                    if (!bcRenderScheduled) {
+                        bcRenderScheduled = true;
+                        requestAnimationFrame(() => {
+                            bcRenderScheduled = false;
+                            if (overlay.isConnected) renderCoverageTable(state.results, tableEl, summaryEl);
+                        });
+                    }
+                }
+            }
+
+            if (boothCoverageCache && (Date.now() - boothCoverageCache.timestamp) < BC_CACHE_TTL) {
+                showComplete(boothCoverageCache.results, boothCoverageCache.timestamp);
+            } else if (bcLoading) {
+                onBcProgress(bcLoading);
+                bcLoading.callbacks.push(onBcProgress);
+            } else {
+                startBcFetch();
+                bcLoading.callbacks.push(onBcProgress);
+            }
         }
 
         function updateRosterWidget() {
