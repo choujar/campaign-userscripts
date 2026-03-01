@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         List Manager Tweaks
 // @namespace    https://github.com/choujar/campaign-userscripts
-// @version      1.37.0
+// @version      1.37.1
 // @description  UX improvements for List Manager and Rocket
 // @author       Sahil Choujar
 // @match        https://listmanager.greens.org.au/*
@@ -1055,12 +1055,12 @@ The election has now been called! We need people to hand out 'How to Vote' cards
         ];
 
         const BOOTH_TIME_SLOTS = [
-            { label: '6-8', start: 360, end: 480, prepollOnly: true },
             { label: '8-10', start: 480, end: 600 },
             { label: '10-12', start: 600, end: 720 },
             { label: '12-2', start: 720, end: 840 },
             { label: '2-4', start: 840, end: 960 },
-            { label: '4-6', start: 960, end: 1080 }
+            { label: '4-6', start: 960, end: 1080 },
+            { label: '6-8', start: 1080, end: 1200, prepollOnly: true }
         ];
         const PRIORITY_STARS = { 3: '\u2605\u2605\u2605', 2: '\u2605\u2605', 1: '\u2605' };
 
