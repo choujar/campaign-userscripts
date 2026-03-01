@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         List Manager Tweaks
 // @namespace    https://github.com/choujar/campaign-userscripts
-// @version      1.37.1
+// @version      1.38.0
 // @description  UX improvements for List Manager and Rocket
 // @author       Sahil Choujar
 // @match        https://listmanager.greens.org.au/*
@@ -1684,34 +1684,23 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                 };
             });
 
-            const ppEntries = allBooths.filter(b => b.info.prepoll !== '0');
-            const ppGroups = new Map();
-            for (const b of ppEntries) {
-                const key = (b.info.premises || b.info.name || '').toLowerCase();
-                if (!ppGroups.has(key)) ppGroups.set(key, []);
-                ppGroups.get(key).push(b);
-            }
-
-            const ppBooths = [];
-            for (const [, entries] of ppGroups) {
-                const first = entries[0];
-                const numDays = entries.length;
-                const needPerDay = computeBoothNeed(first.info);
-                const totalNeed = needPerDay * numDays;
+            const ppBooths = allBooths.filter(b => b.info.prepoll !== '0').map(b => {
+                const info = b.info;
+                const need = computeBoothNeed(info);
                 const slotCoverage = BOOTH_TIME_SLOTS.map(slotDef => {
-                    const allVols = [];
-                    for (const b of entries) allVols.push(...slotVolunteers(b.slots, slotDef));
-                    return { have: allVols.length, need: totalNeed, volunteers: allVols };
+                    const covering = slotVolunteers(b.slots, slotDef);
+                    return { have: covering.length, need, volunteers: covering };
                 });
-                ppBooths.push({
-                    id: first.info.id, name: first.info.premises || first.info.name,
-                    premises: first.info.premises,
-                    priority: parseInt(first.info.priority) || 1, peopleRequired: totalNeed,
-                    estTotal: parseInt(first.info.est_total) || 0, estGreen: parseInt(first.info.est_green) || 0,
-                    isShared: first.info.isshared === '1', isPrepoll: true, prepollDays: numDays,
+                return {
+                    id: info.id, name: info.premises || info.name,
+                    premises: info.premises,
+                    priority: parseInt(info.priority) || 1, peopleRequired: need,
+                    estTotal: parseInt(info.est_total) || 0, estGreen: parseInt(info.est_green) || 0,
+                    isShared: info.isshared === '1', isPrepoll: true,
+                    prepollDay: parseInt(info.prepoll) || 0,
                     slotCoverage
-                });
-            }
+                };
+            });
 
             return [...edBooths, ...ppBooths];
         }
@@ -1923,12 +1912,12 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                 if (b.priority !== a.priority) return b.priority - a.priority;
                 return a.name.localeCompare(b.name);
             });
-            const ppBooths = electorate.booths.filter(b => b.isPrepoll).sort((a, b) => a.name.localeCompare(b.name));
+            const ppBooths = electorate.booths.filter(b => b.isPrepoll).sort((a, b) => a.name.localeCompare(b.name) || a.prepollDay - b.prepollDay);
             const booths = [...edBooths, ...ppBooths];
             const headers = ['Booth', 'Need', ...BOOTH_TIME_SLOTS.map(s => s.label), '%'];
             const rows = [];
             for (const booth of booths) {
-                const prefix = booth.isPrepoll ? '[PP] ' : (PRIORITY_STARS[booth.priority] || '\u2605') + ' ';
+                const prefix = booth.isPrepoll ? `[PP D${booth.prepollDay}] ` : (PRIORITY_STARS[booth.priority] || '\u2605') + ' ';
                 const cells = [
                     { text: prefix + booth.name, color: '#333' },
                     { text: String(booth.peopleRequired), align: 'center', color: '#999' }
@@ -2104,7 +2093,7 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                     if (b.priority !== a.priority) return b.priority - a.priority;
                     return a.name.localeCompare(b.name);
                 });
-                const ppBooths = electorate.booths.filter(b => b.isPrepoll).sort((a, b) => a.name.localeCompare(b.name));
+                const ppBooths = electorate.booths.filter(b => b.isPrepoll).sort((a, b) => a.name.localeCompare(b.name) || a.prepollDay - b.prepollDay);
                 const booths = [...edBooths, ...ppBooths];
 
                 const frag = document.createDocumentFragment();
@@ -2113,11 +2102,11 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                     tr.className = 'gus-bc-booth-row';
                     tr.dataset.parent = eid;
                     const ppTag = booth.isPrepoll ? `<span class="gus-bc-pp-tag">PP</span> ` : '';
-                    const ppDays = booth.isPrepoll ? ` <span style="color:#aaa;font-size:9px;">${booth.prepollDays}d</span>` : '';
+                    const ppDays = booth.isPrepoll ? ` <span style="color:#aaa;font-size:9px;">Day ${booth.prepollDay}</span>` : '';
                     const starLabel = booth.isPrepoll ? '' : `<span class="gus-bc-priority">${PRIORITY_STARS[booth.priority] || '\u2605'}</span>`;
                     let cells = `<td>${starLabel}${ppTag}${escapeHtml(booth.name)}${ppDays}</td>`;
                     const needLabel = booth.isPrepoll
-                        ? `<span title="${booth.prepollDays} days × ${Math.round(booth.peopleRequired / booth.prepollDays)}/day">${booth.peopleRequired}</span>`
+                        ? `<span title="Prepoll Day ${booth.prepollDay}">${booth.peopleRequired}</span>`
                         : String(booth.peopleRequired);
                     cells += `<td style="font-size:10px;color:#999;" title="${escapeHtml(booth.premises || '')}">${needLabel}</td>`;
                     for (let si = 0; si < BOOTH_TIME_SLOTS.length; si++) {
