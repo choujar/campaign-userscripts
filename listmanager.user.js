@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         List Manager Tweaks
 // @namespace    https://github.com/choujar/campaign-userscripts
-// @version      1.36.1
+// @version      1.37.0
 // @description  UX improvements for List Manager and Rocket
 // @author       Sahil Choujar
 // @match        https://listmanager.greens.org.au/*
@@ -1055,6 +1055,7 @@ The election has now been called! We need people to hand out 'How to Vote' cards
         ];
 
         const BOOTH_TIME_SLOTS = [
+            { label: '6-8', start: 360, end: 480, prepollOnly: true },
             { label: '8-10', start: 480, end: 600 },
             { label: '10-12', start: 600, end: 720 },
             { label: '12-2', start: 720, end: 840 },
@@ -1671,6 +1672,7 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                 const info = b.info;
                 const need = computeBoothNeed(info);
                 const slotCoverage = BOOTH_TIME_SLOTS.map(slotDef => {
+                    if (slotDef.prepollOnly) return { have: 0, need: 0, volunteers: [] };
                     const covering = slotVolunteers(b.slots, slotDef);
                     return { have: covering.length, need, volunteers: covering };
                 });
@@ -1782,7 +1784,7 @@ The election has now been called! We need people to hand out 'How to Vote' cards
 
         function bcDrawTableToCanvas(title, headers, rows) {
             const scale = 2;
-            const colWidths = [220, 50, 70, 70, 70, 70, 70, 60];
+            const colWidths = [200, 50, ...BOOTH_TIME_SLOTS.map(() => 65), 55];
             const totalW = colWidths.reduce((a, b) => a + b, 0) + 20;
             const headerH = 32;
             const rowH = 26;
@@ -1940,7 +1942,7 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                     }
                 }
                 const pct = booth.peopleRequired > 0
-                    ? Math.min(100, Math.round(booth.slotCoverage.reduce((s, c) => s + Math.min(c.have, c.need), 0) / (booth.peopleRequired * BOOTH_TIME_SLOTS.length) * 100))
+                    ? Math.min(100, Math.round(booth.slotCoverage.reduce((s, c) => s + Math.min(c.have, c.need), 0) / (booth.slotCoverage.filter(c => c.need > 0).length * booth.peopleRequired || 1) * 100))
                     : 100;
                 cells.push({ text: pct + '%', align: 'right', bold: true, color: bcPctColor(pct) });
                 rows.push({ cells });
@@ -2125,7 +2127,7 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                         cells += `<td><span class="gus-bc-slot ${cls}" data-si="${si}" data-bid="${booth.id}">${label}</span></td>`;
                     }
                     const boothPct = booth.peopleRequired > 0
-                        ? Math.min(100, Math.round(booth.slotCoverage.reduce((s, c) => s + Math.min(c.have, c.need), 0) / (booth.peopleRequired * BOOTH_TIME_SLOTS.length) * 100))
+                        ? Math.min(100, Math.round(booth.slotCoverage.reduce((s, c) => s + Math.min(c.have, c.need), 0) / (booth.slotCoverage.filter(c => c.need > 0).length * booth.peopleRequired || 1) * 100))
                         : 100;
                     const boothPctLabel = `<span class="${bcPctClass(boothPct)}">${boothPct}%</span>`;
                     cells += `<td class="gus-bc-pct">${boothPctLabel}</td>`;
