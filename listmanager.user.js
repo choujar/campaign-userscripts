@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         List Manager Tweaks
 // @namespace    https://github.com/choujar/campaign-userscripts
-// @version      1.34.0
+// @version      1.35.0
 // @description  UX improvements for List Manager and Rocket
 // @author       Sahil Choujar
 // @match        https://listmanager.greens.org.au/*
@@ -694,6 +694,7 @@ The election has now been called! We need people to hand out 'How to Vote' cards
             .gus-bc-booth-row td:first-child { padding-left: 28px; }
             .gus-bc-booth-row:hover { background: #fafafa; }
             .gus-bc-priority { color: #f57c00; font-size: 10px; letter-spacing: -1px; margin-right: 4px; }
+            .gus-bc-pp-tag { background: #e8eaf6; color: #3949ab; font-size: 9px; font-weight: 700; padding: 1px 4px; border-radius: 3px; margin-right: 3px; }
             .gus-bc-tooltip {
                 position: fixed;
                 background: #333;
@@ -1627,49 +1628,77 @@ The election has now been called! We need people to hand out 'How to Vote' cards
             });
         }
 
-        function parseElectionDayBooths(commands) {
+        function computeBoothNeed(info) {
+            const pr = info.people_required;
+            if (pr !== null && pr !== undefined && pr !== '' && parseFloat(pr) > 0) {
+                return parseFloat(pr);
+            } else if (info.est_total) {
+                return Math.max(1, Math.round(parseInt(info.est_total) / 1000));
+            }
+            return 2;
+        }
+
+        function slotVolunteers(slots, slotDef) {
+            return (slots || []).filter(vol => {
+                const vs = parseInt(vol.time_start);
+                const ve = parseInt(vol.time_end);
+                return vs < slotDef.end && ve > slotDef.start;
+            }).map(vol => ({
+                name: vol.name,
+                timeStart: parseInt(vol.time_start),
+                timeEnd: parseInt(vol.time_end)
+            }));
+        }
+
+        function parseBooths(commands) {
             if (!commands || !commands.booths) return [];
-            const edBooths = commands.booths.filter(b => b.info && b.info.prepoll === '0');
-            return edBooths
-                .map(b => {
-                    const info = b.info;
-                    const pr = info.people_required;
-                    let need;
-                    if (pr !== null && pr !== undefined && pr !== '' && parseFloat(pr) > 0) {
-                        need = parseFloat(pr);
-                    } else if (info.est_total) {
-                        need = Math.max(1, Math.round(parseInt(info.est_total) / 1000));
-                    } else {
-                        need = 2;
-                    }
-                    const slotCoverage = BOOTH_TIME_SLOTS.map(slotDef => {
-                        const covering = (b.slots || []).filter(vol => {
-                            const vs = parseInt(vol.time_start);
-                            const ve = parseInt(vol.time_end);
-                            return vs < slotDef.end && ve > slotDef.start;
-                        }).map(vol => ({
-                            name: vol.name,
-                            timeStart: parseInt(vol.time_start),
-                            timeEnd: parseInt(vol.time_end)
-                        }));
-                        return {
-                            have: covering.length,
-                            need: need,
-                            volunteers: covering
-                        };
-                    });
-                    return {
-                        id: info.id,
-                        name: info.name,
-                        premises: info.premises,
-                        priority: parseInt(info.priority) || 1,
-                        peopleRequired: need,
-                        estTotal: parseInt(info.est_total) || 0,
-                        estGreen: parseInt(info.est_green) || 0,
-                        isShared: info.isshared === '1',
-                        slotCoverage
-                    };
+            const allBooths = commands.booths.filter(b => b.info && b.info.defunct !== '1');
+
+            const edBooths = allBooths.filter(b => b.info.prepoll === '0').map(b => {
+                const info = b.info;
+                const need = computeBoothNeed(info);
+                const slotCoverage = BOOTH_TIME_SLOTS.map(slotDef => {
+                    const covering = slotVolunteers(b.slots, slotDef);
+                    return { have: covering.length, need, volunteers: covering };
                 });
+                return {
+                    id: info.id, name: info.name, premises: info.premises,
+                    priority: parseInt(info.priority) || 1, peopleRequired: need,
+                    estTotal: parseInt(info.est_total) || 0, estGreen: parseInt(info.est_green) || 0,
+                    isShared: info.isshared === '1', isPrepoll: false, slotCoverage
+                };
+            });
+
+            const ppEntries = allBooths.filter(b => b.info.prepoll !== '0');
+            const ppGroups = new Map();
+            for (const b of ppEntries) {
+                const key = (b.info.premises || b.info.name || '').toLowerCase();
+                if (!ppGroups.has(key)) ppGroups.set(key, []);
+                ppGroups.get(key).push(b);
+            }
+
+            const ppBooths = [];
+            for (const [, entries] of ppGroups) {
+                const first = entries[0];
+                const numDays = entries.length;
+                const needPerDay = computeBoothNeed(first.info);
+                const totalNeed = needPerDay * numDays;
+                const slotCoverage = BOOTH_TIME_SLOTS.map(slotDef => {
+                    const allVols = [];
+                    for (const b of entries) allVols.push(...slotVolunteers(b.slots, slotDef));
+                    return { have: allVols.length, need: totalNeed, volunteers: allVols };
+                });
+                ppBooths.push({
+                    id: first.info.id, name: first.info.premises || first.info.name,
+                    premises: first.info.premises,
+                    priority: parseInt(first.info.priority) || 1, peopleRequired: totalNeed,
+                    estTotal: parseInt(first.info.est_total) || 0, estGreen: parseInt(first.info.est_green) || 0,
+                    isShared: first.info.isshared === '1', isPrepoll: true, prepollDays: numDays,
+                    slotCoverage
+                });
+            }
+
+            return [...edBooths, ...ppBooths];
         }
 
         function computeElectorateSummary(booths) {
@@ -1870,21 +1899,23 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                 totalCells.push({ text: grandPct + '%', align: 'right', bold: true, color: bcPctColor(grandPct) });
                 rows.push({ cells: totalCells, divider: true });
             }
-            const canvas = bcDrawTableToCanvas('Booth Coverage \u2014 Election Day', headers, rows);
+            const canvas = bcDrawTableToCanvas('Booth Coverage', headers, rows);
             bcDownloadCanvas(canvas, 'booth-coverage-overview.png');
         }
 
         function bcExportElectorate(electorate) {
-            const booths = [...electorate.booths].sort((a, b) => {
+            const edBooths = electorate.booths.filter(b => !b.isPrepoll).sort((a, b) => {
                 if (b.priority !== a.priority) return b.priority - a.priority;
                 return a.name.localeCompare(b.name);
             });
+            const ppBooths = electorate.booths.filter(b => b.isPrepoll).sort((a, b) => a.name.localeCompare(b.name));
+            const booths = [...edBooths, ...ppBooths];
             const headers = ['Booth', 'Need', ...BOOTH_TIME_SLOTS.map(s => s.label), '%'];
             const rows = [];
             for (const booth of booths) {
-                const stars = PRIORITY_STARS[booth.priority] || '\u2605';
+                const prefix = booth.isPrepoll ? '[PP] ' : (PRIORITY_STARS[booth.priority] || '\u2605') + ' ';
                 const cells = [
-                    { text: stars + ' ' + booth.name, color: '#333' },
+                    { text: prefix + booth.name, color: '#333' },
                     { text: String(booth.peopleRequired), align: 'center', color: '#999' }
                 ];
                 for (let si = 0; si < BOOTH_TIME_SLOTS.length; si++) {
@@ -2047,18 +2078,26 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                     console.log(`[GUS] ${electorate.name} — raw API data:`, electorate._raw);
                     console.log(`[GUS] ${electorate.name} — parsed booths:`, electorate.booths);
 
-                    const booths = [...electorate.booths].sort((a, b) => {
+                    const edBooths = electorate.booths.filter(b => !b.isPrepoll).sort((a, b) => {
                         if (b.priority !== a.priority) return b.priority - a.priority;
                         return a.name.localeCompare(b.name);
                     });
+                    const ppBooths = electorate.booths.filter(b => b.isPrepoll).sort((a, b) => a.name.localeCompare(b.name));
+                    const booths = [...edBooths, ...ppBooths];
 
                     const frag = document.createDocumentFragment();
                     for (const booth of booths) {
                         const tr = document.createElement('tr');
                         tr.className = 'gus-bc-booth-row';
                         tr.dataset.parent = eid;
-                        let cells = `<td><span class="gus-bc-priority">${PRIORITY_STARS[booth.priority] || '\u2605'}</span>${escapeHtml(booth.name)}</td>`;
-                        cells += `<td style="font-size:10px;color:#999;" title="${escapeHtml(booth.premises || '')}">${booth.peopleRequired}</td>`;
+                        const ppTag = booth.isPrepoll ? `<span class="gus-bc-pp-tag">PP</span> ` : '';
+                        const ppDays = booth.isPrepoll ? ` <span style="color:#aaa;font-size:9px;">${booth.prepollDays}d</span>` : '';
+                        const starLabel = booth.isPrepoll ? '' : `<span class="gus-bc-priority">${PRIORITY_STARS[booth.priority] || '\u2605'}</span>`;
+                        let cells = `<td>${starLabel}${ppTag}${escapeHtml(booth.name)}${ppDays}</td>`;
+                        const needLabel = booth.isPrepoll
+                            ? `<span title="${booth.prepollDays} days × ${Math.round(booth.peopleRequired / booth.prepollDays)}/day">${booth.peopleRequired}</span>`
+                            : String(booth.peopleRequired);
+                        cells += `<td style="font-size:10px;color:#999;" title="${escapeHtml(booth.premises || '')}">${needLabel}</td>`;
                         for (let si = 0; si < BOOTH_TIME_SLOTS.length; si++) {
                             const sc = booth.slotCoverage[si];
                             const cls = bcSlotClass(sc.have, sc.need);
@@ -2100,7 +2139,7 @@ The election has now been called! We need people to hand out 'How to Vote' cards
             popup.className = 'gus-bc-popup';
             popup.innerHTML = `
                 <div class="gus-bc-header">
-                    <span class="gus-bc-title">Booth Coverage \u2014 Election Day</span>
+                    <span class="gus-bc-title">Booth Coverage</span>
                     <span class="gus-bc-dl-all" title="Download overview image" style="cursor:pointer;margin-left:8px;font-size:14px;opacity:0.5;">&#x2B07;</span>
                     <span class="gus-bc-close" title="Close">&times;</span>
                 </div>
@@ -2153,7 +2192,7 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                             authFails++;
                         } else {
                             try {
-                                const booths = data ? parseElectionDayBooths(data) : [];
+                                const booths = data ? parseBooths(data) : [];
                                 const summary = computeElectorateSummary(booths);
                                 results.push({ name, id, booths, summary, _raw: data });
                                 renderCoverageTable(results, tableEl, summaryEl);
