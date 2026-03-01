@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         List Manager Tweaks
 // @namespace    https://github.com/choujar/campaign-userscripts
-// @version      1.36.0
+// @version      1.36.1
 // @description  UX improvements for List Manager and Rocket
 // @author       Sahil Choujar
 // @match        https://listmanager.greens.org.au/*
@@ -1944,6 +1944,19 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                     : 100;
                 cells.push({ text: pct + '%', align: 'right', bold: true, color: bcPctColor(pct) });
                 rows.push({ cells });
+            }
+            if (booths.length > 1) {
+                const s = electorate.summary;
+                const totalCells = [
+                    { text: 'Total', bold: true },
+                    { text: String(s.totalBooths), align: 'center', bold: true }
+                ];
+                for (let si = 0; si < BOOTH_TIME_SLOTS.length; si++) {
+                    const ss = s.slotSummaries[si];
+                    totalCells.push({ text: `${ss.totalHave}/${ss.totalNeed}`, badge: true, colors: bcSlotColors(ss.cappedHave, ss.totalNeed) });
+                }
+                totalCells.push({ text: s.overallPct + '%', align: 'right', bold: true, color: bcPctColor(s.overallPct) });
+                rows.push({ cells: totalCells, divider: true });
             }
             const canvas = bcDrawTableToCanvas('Booth Coverage \u2014 ' + electorate.name, headers, rows);
             bcDownloadCanvas(canvas, 'booth-coverage-' + electorate.name.toLowerCase().replace(/\s+/g, '-') + '.png');
