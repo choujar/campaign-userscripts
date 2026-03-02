@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         List Manager Tweaks
 // @namespace    https://github.com/choujar/campaign-userscripts
-// @version      1.38.0
+// @version      1.38.1
 // @description  UX improvements for List Manager and Rocket
 // @author       Sahil Choujar
 // @match        https://listmanager.greens.org.au/*
@@ -1062,6 +1062,9 @@ The election has now been called! We need people to hand out 'How to Vote' cards
             { label: '4-6', start: 960, end: 1080 },
             { label: '6-8', start: 1080, end: 1200, prepollOnly: true }
         ];
+        // SA 2026 EVC hours: only Thu 19/3 open until 8pm, all other days close at 6pm
+        // Prepoll schedule: Day 1=Sat14, 2=Mon16, 3=Tue17, 4=Wed18, 5=Thu19, 6=Fri20
+        const PREPOLL_LATE_VOTING_DAY = 5;
         const PRIORITY_STARS = { 3: '\u2605\u2605\u2605', 2: '\u2605\u2605', 1: '\u2605' };
 
         function getPrioritisedElectorates() {
@@ -1687,7 +1690,11 @@ The election has now been called! We need people to hand out 'How to Vote' cards
             const ppBooths = allBooths.filter(b => b.info.prepoll !== '0').map(b => {
                 const info = b.info;
                 const need = computeBoothNeed(info);
+                const ppDay = parseInt(info.prepoll) || 0;
                 const slotCoverage = BOOTH_TIME_SLOTS.map(slotDef => {
+                    if (slotDef.prepollOnly && ppDay !== PREPOLL_LATE_VOTING_DAY) {
+                        return { have: 0, need: 0, volunteers: [] };
+                    }
                     const covering = slotVolunteers(b.slots, slotDef);
                     return { have: covering.length, need, volunteers: covering };
                 });
