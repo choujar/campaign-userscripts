@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         List Manager Tweaks
 // @namespace    https://github.com/choujar/campaign-userscripts
-// @version      1.38.2
+// @version      1.39.0
 // @description  UX improvements for List Manager and Rocket
 // @author       Sahil Choujar
 // @match        https://listmanager.greens.org.au/*
@@ -334,6 +334,26 @@ The election has now been called! We need people to hand out 'How to Vote' cards
         }
         .gus-tmpl-add:hover { background: #f0f0f0; border-color: #666; }
         .gus-tmpl-empty { font-size: 13px; color: #999; font-style: italic; padding: 8px 0; }
+        .gus-tmpl-section-header {
+            display: flex; align-items: center; gap: 8px;
+            margin: 0 0 8px 0; padding-bottom: 4px;
+            border-bottom: 1px solid #e0e0e0;
+        }
+        .gus-tmpl-section-header h3 {
+            font-size: 14px; font-weight: 600; color: #444;
+            margin: 0; padding: 0; border: none; flex: 1;
+        }
+        .gus-tmpl-io-btn {
+            padding: 2px 8px; border-radius: 4px; border: 1px solid #ccc;
+            background: white; cursor: pointer; font-size: 11px; color: #666;
+        }
+        .gus-tmpl-io-btn:hover { background: #f0f0f0; border-color: #999; }
+        .gus-tmpl-io-msg {
+            font-size: 12px; padding: 6px 10px; border-radius: 4px;
+            margin-bottom: 8px;
+        }
+        .gus-tmpl-io-msg.success { background: #e8f5e9; color: #2e7d32; }
+        .gus-tmpl-io-msg.error { background: #fbe9e7; color: #c62828; }
         .gus-tmpl-confirm {
             display: inline-flex; align-items: center; gap: 6px;
             font-size: 12px; color: #d32f2f;
@@ -819,6 +839,7 @@ The election has now been called! We need people to hand out 'How to Vote' cards
             let editingScope = null; // 'global' or 'list'
             let editingIndex = -1;
             let addingScope = null;
+            let importMsg = null;
 
             function render() {
                 const modal = document.createElement('div');
@@ -831,7 +852,79 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                 function buildSection(title, templates, scope) {
                     const section = document.createElement('div');
                     section.className = 'gus-tmpl-section';
-                    section.innerHTML = `<h3>${escapeHtml(title)}</h3>`;
+
+                    if (scope === 'global') {
+                        const header = document.createElement('div');
+                        header.className = 'gus-tmpl-section-header';
+                        header.innerHTML = `<h3>${escapeHtml(title)}</h3>`;
+
+                        const exportBtn = document.createElement('button');
+                        exportBtn.className = 'gus-tmpl-io-btn';
+                        exportBtn.textContent = 'Export';
+                        exportBtn.title = 'Export global templates as JSON';
+                        exportBtn.addEventListener('click', () => {
+                            const data = JSON.stringify(templates, null, 2);
+                            const blob = new Blob([data], { type: 'application/json' });
+                            const url = URL.createObjectURL(blob);
+                            const a = document.createElement('a');
+                            a.href = url;
+                            a.download = 'sms-templates.json';
+                            a.click();
+                            URL.revokeObjectURL(url);
+                        });
+
+                        const importBtn = document.createElement('button');
+                        importBtn.className = 'gus-tmpl-io-btn';
+                        importBtn.textContent = 'Import';
+                        importBtn.title = 'Import global templates from JSON';
+                        importBtn.addEventListener('click', () => {
+                            const input = document.createElement('input');
+                            input.type = 'file';
+                            input.accept = '.json';
+                            input.addEventListener('change', () => {
+                                const file = input.files[0];
+                                if (!file) return;
+                                const reader = new FileReader();
+                                reader.onload = () => {
+                                    try {
+                                        const imported = JSON.parse(reader.result);
+                                        if (!Array.isArray(imported)) throw new Error('Not an array');
+                                        if (!imported.every(t => t.name && t.body)) throw new Error('Invalid format');
+                                        const existingNames = new Set(templates.map(t => t.name));
+                                        let added = 0, skipped = 0;
+                                        for (const t of imported) {
+                                            if (existingNames.has(t.name)) { skipped++; }
+                                            else { templates.push({ name: t.name, body: t.body }); added++; }
+                                        }
+                                        saveGlobalTemplates(templates);
+                                        importMsg = added > 0
+                                            ? { text: `Imported ${added} template${added !== 1 ? 's' : ''}${skipped ? `, ${skipped} skipped (duplicate name)` : ''}`, type: 'success' }
+                                            : { text: `No new templates — ${skipped} already exist`, type: 'error' };
+                                        render();
+                                    } catch (e) {
+                                        importMsg = { text: 'Invalid file — expected JSON array of {name, body}', type: 'error' };
+                                        render();
+                                    }
+                                };
+                                reader.readAsText(file);
+                            });
+                            input.click();
+                        });
+
+                        header.appendChild(importBtn);
+                        header.appendChild(exportBtn);
+                        section.appendChild(header);
+                    } else {
+                        section.innerHTML = `<h3>${escapeHtml(title)}</h3>`;
+                    }
+
+                    if (scope === 'global' && importMsg) {
+                        const msg = document.createElement('div');
+                        msg.className = 'gus-tmpl-io-msg ' + importMsg.type;
+                        msg.textContent = importMsg.text;
+                        section.appendChild(msg);
+                        importMsg = null;
+                    }
 
                     const list = document.createElement('div');
                     list.className = 'gus-tmpl-list';
