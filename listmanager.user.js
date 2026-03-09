@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         List Manager Tweaks
 // @namespace    https://github.com/choujar/campaign-userscripts
-// @version      1.39.3
+// @version      1.39.4
 // @description  UX improvements for List Manager and Rocket
 // @author       Sahil Choujar
 // @match        https://listmanager.greens.org.au/*
@@ -1176,12 +1176,12 @@ The election has now been called! We need people to hand out 'How to Vote' cards
             { label: '4-6', start: 960, end: 1080 },
             { label: '6-8', start: 1080, end: 1200, prepollOnly: true }
         ];
-        // SA 2026 EVC hours: only Thu 19/3 open until 8pm, all other days close at 6pm
-        // Prepoll schedule: Day 1=Sat14, 2=Sun15, 3=Mon16, 4=Tue17, 5=Wed18, 6=Thu19, 7=Fri20
-        const PREPOLL_LATE_VOTING_DAY = 6;
+        // SA 2026 EVC: days count backwards from election (21/3). Day 2 = Thu 19/3 open until 8pm.
+        // No Day 6 (Sunday 15/3 — no voting).
+        const PREPOLL_LATE_VOTING_DAY = 2;
         const PREPOLL_DATE_LABELS = {
-            1: 'Sat 14/3', 2: 'Sun 15/3', 3: 'Mon 16/3', 4: 'Tue 17/3',
-            5: 'Wed 18/3', 6: 'Thu 19/3', 7: 'Fri 20/3'
+            7: 'Sat 14/3', 5: 'Mon 16/3', 4: 'Tue 17/3',
+            3: 'Wed 18/3', 2: 'Thu 19/3', 1: 'Fri 20/3'
         };
         const PRIORITY_STARS = { 3: '\u2605\u2605\u2605', 2: '\u2605\u2605', 1: '\u2605' };
 
