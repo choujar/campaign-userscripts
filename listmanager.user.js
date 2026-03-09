@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         List Manager Tweaks
 // @namespace    https://github.com/choujar/campaign-userscripts
-// @version      1.39.2
+// @version      1.39.3
 // @description  UX improvements for List Manager and Rocket
 // @author       Sahil Choujar
 // @match        https://listmanager.greens.org.au/*
@@ -1785,9 +1785,14 @@ The election has now been called! We need people to hand out 'How to Vote' cards
             }));
         }
 
+        let _lastRawPPBooths = [];
         function parseBooths(commands) {
             if (!commands || !commands.booths) return [];
             const allBooths = commands.booths.filter(b => b.info && b.info.defunct !== '1');
+            _lastRawPPBooths.push(...allBooths.filter(b => b.info.prepoll !== '0').map(b => ({
+                name: b.info.premises || b.info.name, id: b.info.id,
+                prepoll: b.info.prepoll, info: { ...b.info }, slots: b.slots
+            })));
 
             const edBooths = allBooths.filter(b => b.info.prepoll === '0').map(b => {
                 const info = b.info;
@@ -2328,6 +2333,7 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                 <div class="gus-bc-header">
                     <span class="gus-bc-title">Booth Coverage</span>
                     <span class="gus-bc-dl-all" title="Download overview image" style="cursor:pointer;margin-left:8px;font-size:14px;opacity:0.5;">&#x2B07;</span>
+                    <span class="gus-bc-dump-pp" title="Dump pre-poll data (debug)" style="cursor:pointer;margin-left:8px;font-size:11px;opacity:0.4;color:#999;">PP&#x1F4BE;</span>
                     <span class="gus-bc-close" title="Close">&times;</span>
                 </div>
                 <div class="gus-bc-summary"></div>
@@ -2337,6 +2343,14 @@ The election has now been called! We need people to hand out 'How to Vote' cards
             `;
 
             popup.querySelector('.gus-bc-close').addEventListener('click', () => { hideBcTooltip(); overlay.remove(); });
+            popup.querySelector('.gus-bc-dump-pp').addEventListener('click', (e) => {
+                e.stopPropagation();
+                const blob = new Blob([JSON.stringify(_lastRawPPBooths, null, 2)], { type: 'application/json' });
+                const a = document.createElement('a');
+                a.href = URL.createObjectURL(blob);
+                a.download = 'prepoll-raw-data.json';
+                a.click();
+            });
             const dlAllBtn = popup.querySelector('.gus-bc-dl-all');
             dlAllBtn.style.display = 'none';
             overlay.appendChild(popup);
