@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         List Manager Tweaks
 // @namespace    https://github.com/choujar/campaign-userscripts
-// @version      1.38.1
+// @version      1.38.2
 // @description  UX improvements for List Manager and Rocket
 // @author       Sahil Choujar
 // @match        https://listmanager.greens.org.au/*
@@ -791,7 +791,7 @@ The election has now been called! We need people to hand out 'How to Vote' cards
         }
 
         function getListName() {
-            const heading = document.querySelector('h5.MuiTypography-h5');
+            const heading = document.querySelector('.MuiTypography-h5');
             if (!heading) return null;
             for (const node of heading.childNodes) {
                 if (node.nodeType === Node.TEXT_NODE && node.textContent.trim()) {
@@ -970,7 +970,7 @@ The election has now been called! We need people to hand out 'How to Vote' cards
             const listId = getListId();
             if (!listId) return;
 
-            const heading = document.querySelector('h5.MuiTypography-h5');
+            const heading = document.querySelector('.MuiTypography-h5');
             if (!heading) return;
             if (heading.querySelector('.gus-template-btn')) return;
 
