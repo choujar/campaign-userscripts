@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         List Manager Tweaks
 // @namespace    https://github.com/choujar/campaign-userscripts
-// @version      1.39.0
+// @version      1.39.1
 // @description  UX improvements for List Manager and Rocket
 // @author       Sahil Choujar
 // @match        https://listmanager.greens.org.au/*
@@ -840,6 +840,7 @@ The election has now been called! We need people to hand out 'How to Vote' cards
             let editingIndex = -1;
             let addingScope = null;
             let importMsg = null;
+            let overwriteOnImport = false;
 
             function render() {
                 const modal = document.createElement('div');
@@ -890,16 +891,25 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                                         const imported = JSON.parse(reader.result);
                                         if (!Array.isArray(imported)) throw new Error('Not an array');
                                         if (!imported.every(t => t.name && t.body)) throw new Error('Invalid format');
-                                        const existingNames = new Set(templates.map(t => t.name));
-                                        let added = 0, skipped = 0;
+                                        const existingNames = new Map(templates.map((t, i) => [t.name, i]));
+                                        let added = 0, updated = 0, skipped = 0;
                                         for (const t of imported) {
-                                            if (existingNames.has(t.name)) { skipped++; }
-                                            else { templates.push({ name: t.name, body: t.body }); added++; }
+                                            if (existingNames.has(t.name)) {
+                                                if (overwriteOnImport) {
+                                                    templates[existingNames.get(t.name)] = { name: t.name, body: t.body };
+                                                    updated++;
+                                                } else { skipped++; }
+                                            } else {
+                                                templates.push({ name: t.name, body: t.body });
+                                                added++;
+                                            }
                                         }
                                         saveGlobalTemplates(templates);
-                                        importMsg = added > 0
-                                            ? { text: `Imported ${added} template${added !== 1 ? 's' : ''}${skipped ? `, ${skipped} skipped (duplicate name)` : ''}`, type: 'success' }
-                                            : { text: `No new templates — ${skipped} already exist`, type: 'error' };
+                                        const parts = [];
+                                        if (added) parts.push(`${added} added`);
+                                        if (updated) parts.push(`${updated} updated`);
+                                        if (skipped) parts.push(`${skipped} skipped (duplicate)`);
+                                        importMsg = { text: parts.join(', ') || 'Nothing to import', type: (added || updated) ? 'success' : 'error' };
                                         render();
                                     } catch (e) {
                                         importMsg = { text: 'Invalid file — expected JSON array of {name, body}', type: 'error' };
@@ -911,7 +921,18 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                             input.click();
                         });
 
+                        const overwriteLabel = document.createElement('label');
+                        overwriteLabel.style.cssText = 'display:flex;align-items:center;gap:3px;font-size:11px;color:#666;cursor:pointer;margin-left:4px;';
+                        const overwriteCb = document.createElement('input');
+                        overwriteCb.type = 'checkbox';
+                        overwriteCb.checked = overwriteOnImport;
+                        overwriteCb.style.cssText = 'margin:0;cursor:pointer;';
+                        overwriteCb.addEventListener('change', () => { overwriteOnImport = overwriteCb.checked; });
+                        overwriteLabel.appendChild(overwriteCb);
+                        overwriteLabel.appendChild(document.createTextNode('Overwrite'));
+
                         header.appendChild(importBtn);
+                        header.appendChild(overwriteLabel);
                         header.appendChild(exportBtn);
                         section.appendChild(header);
                     } else {
