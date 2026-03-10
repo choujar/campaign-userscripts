@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         List Manager Tweaks
 // @namespace    https://github.com/choujar/campaign-userscripts
-// @version      1.40.0
+// @version      1.40.1
 // @description  UX improvements for List Manager and Rocket
 // @author       Sahil Choujar
 // @match        https://listmanager.greens.org.au/*
@@ -1533,14 +1533,17 @@ The election has now been called! We need people to hand out 'How to Vote' cards
 
                 const r = 40;
                 const circ = 2 * Math.PI * r;
+                const rawPd = pdTotal ?? 0;
+                const rawEv = evTotal ?? 0;
+                const rawSum = rawPd + rawEv || 1;
+                const grandPct = Math.min(grandTotal / TOTAL_TARGET, 1);
                 const segs = [
-                    { color: PD_COLOR, count: pdTotal ?? 0, label: `PD: ${pdTotal ?? 0}` },
-                    { color: EV_COLOR, count: evTotal ?? 0, label: `EV: ${evTotal ?? 0}` }
+                    { color: PD_COLOR, pct: (rawPd / rawSum) * grandPct, label: `PD: ${rawPd}` },
+                    { color: EV_COLOR, pct: (rawEv / rawSum) * grandPct, label: `EV: ${rawEv}` }
                 ];
                 let rotation = 0;
                 for (const seg of segs) {
-                    const segPct = seg.count / TOTAL_TARGET;
-                    const len = Math.min(segPct, 1) * circ;
+                    const len = seg.pct * circ;
                     if (len < 0.1) continue;
                     const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
                     circle.setAttribute('class', 'gus-ring-seg');
@@ -1555,7 +1558,7 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                     totalSvg.appendChild(circle);
                     circle.addEventListener('mouseenter', () => { totalPctEl.textContent = seg.label; });
                     circle.addEventListener('mouseleave', () => { totalPctEl.textContent = totalPctEl.dataset.default; });
-                    rotation += segPct * 360;
+                    rotation += seg.pct * 360;
                 }
             }
 
@@ -2409,12 +2412,16 @@ The election has now been called! We need people to hand out 'How to Vote' cards
             if (pdTotal !== null) {
                 const grandTotal = _grandTotal ?? ((pdTotal ?? 0) + (evTotal ?? 0));
                 const totalPct = Math.round(Math.min((grandTotal / TOTAL_TARGET) * 100, 100));
-                const pdPct = Math.min(((pdTotal ?? 0) / TOTAL_TARGET) * 100, 100);
-                const evPct = Math.min(((evTotal ?? 0) / TOTAL_TARGET) * 100, Math.max(100 - pdPct, 0));
+                const rawPd = pdTotal ?? 0;
+                const rawEv = evTotal ?? 0;
+                const rawSum = rawPd + rawEv || 1;
+                const grandPct = Math.min((grandTotal / TOTAL_TARGET) * 100, 100);
+                const pdPct = (rawPd / rawSum) * grandPct;
+                const evPct = (rawEv / rawSum) * grandPct;
 
                 const segments = [
-                    { color: PD_COLOR, pct: pdPct, label: `PD: ${pdTotal ?? 0}` },
-                    { color: EV_COLOR, pct: evPct, label: `EV: ${evTotal ?? 0}` }
+                    { color: PD_COLOR, pct: pdPct, label: `PD: ${rawPd}` },
+                    { color: EV_COLOR, pct: evPct, label: `EV: ${rawEv}` }
                 ];
 
                 body.innerHTML = `
