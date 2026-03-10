@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         List Manager Tweaks
 // @namespace    https://github.com/choujar/campaign-userscripts
-// @version      1.41.0
+// @version      1.41.1
 // @description  UX improvements for List Manager and Rocket
 // @author       Sahil Choujar
 // @match        https://listmanager.greens.org.au/*
@@ -1982,7 +1982,10 @@ The election has now been called! We need people to hand out 'How to Vote' cards
         }
 
         function bcExportOverview(results) {
-            const sorted = bcSortResults(results);
+            const filtered = bcFilterResults(results, bcFilterMode);
+            const sorted = bcSortResults(filtered);
+            const modeLabel = bcFilterMode === 'ed' ? ' (Election Day)' : bcFilterMode === 'pp' ? ' (Pre-poll)' : '';
+            const modeSuffix = bcFilterMode === 'ed' ? '-election-day' : bcFilterMode === 'pp' ? '-prepoll' : '';
             const headers = ['Electorate', 'Booths', ...BOOTH_TIME_SLOTS.map(s => s.label), '%'];
             const rows = [];
             for (const r of sorted) {
@@ -1998,13 +2001,13 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                 cells.push({ text: s.overallPct + '%', align: 'right', bold: true, color: bcPctColor(s.overallPct) });
                 rows.push({ cells });
             }
-            if (results.length > 1) {
+            if (filtered.length > 1) {
                 const grandSlots = BOOTH_TIME_SLOTS.map((_, si) => {
                     let have = 0, need = 0, capped = 0;
-                    for (const r of results) { const ss = r.summary.slotSummaries[si]; have += ss.totalHave; need += ss.totalNeed; capped += ss.cappedHave; }
+                    for (const r of filtered) { const ss = r.summary.slotSummaries[si]; have += ss.totalHave; need += ss.totalNeed; capped += ss.cappedHave; }
                     return { have, need, capped };
                 });
-                const grandBooths = results.reduce((s, r) => s + r.summary.totalBooths, 0);
+                const grandBooths = filtered.reduce((s, r) => s + r.summary.totalBooths, 0);
                 const grandCapped = grandSlots.reduce((s, v) => s + v.capped, 0);
                 const grandNeed = grandSlots.reduce((s, v) => s + v.need, 0);
                 const grandPct = grandNeed > 0 ? Math.round((grandCapped / grandNeed) * 100) : 100;
@@ -2019,8 +2022,8 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                 totalCells.push({ text: grandPct + '%', align: 'right', bold: true, color: bcPctColor(grandPct) });
                 rows.push({ cells: totalCells, divider: true });
             }
-            const canvas = bcDrawTableToCanvas('Booth Coverage', headers, rows);
-            bcDownloadCanvas(canvas, 'booth-coverage-overview.png');
+            const canvas = bcDrawTableToCanvas('Booth Coverage' + modeLabel, headers, rows);
+            bcDownloadCanvas(canvas, 'booth-coverage-overview' + modeSuffix + '.png');
         }
 
         function bcExportElectorate(electorate) {
@@ -2364,9 +2367,11 @@ The election has now been called! We need people to hand out 'How to Vote' cards
             });
 
             const BC_CACHE_TTL = 30 * 60 * 1000;
+            let dlAllData = null;
+            dlAllBtn.addEventListener('click', (e) => { e.stopPropagation(); if (dlAllData) bcExportOverview(dlAllData); });
             function enableDlAll(data) {
+                dlAllData = data;
                 dlAllBtn.style.display = 'inline';
-                dlAllBtn.addEventListener('click', (e) => { e.stopPropagation(); bcExportOverview(data); });
             }
 
             function addRefreshBtn(data) {
