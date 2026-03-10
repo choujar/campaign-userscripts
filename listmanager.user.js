@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         List Manager Tweaks
 // @namespace    https://github.com/choujar/campaign-userscripts
-// @version      1.41.1
+// @version      1.41.2
 // @description  UX improvements for List Manager and Rocket
 // @author       Sahil Choujar
 // @match        https://listmanager.greens.org.au/*
@@ -2331,8 +2331,10 @@ The election has now been called! We need people to hand out 'How to Vote' cards
             popup.className = 'gus-bc-popup';
             popup.innerHTML = `
                 <div class="gus-bc-header">
-                    <span class="gus-bc-title">Booth Coverage</span>
-                    <span class="gus-bc-dl-all" title="Download overview image" style="cursor:pointer;margin-left:8px;font-size:14px;opacity:0.5;">&#x2B07;</span>
+                    <span style="display:flex;align-items:center;gap:8px;">
+                        <span class="gus-bc-title">Booth Coverage</span>
+                        <span class="gus-bc-dl-all gus-bc-btn" title="Download overview image" style="cursor:pointer;font-size:11px;display:none;">&#x2B07; PNG</span>
+                    </span>
                     <span class="gus-bc-close" title="Close">&times;</span>
                 </div>
                 <div class="gus-bc-filter-bar">
@@ -2348,7 +2350,6 @@ The election has now been called! We need people to hand out 'How to Vote' cards
 
             popup.querySelector('.gus-bc-close').addEventListener('click', () => { hideBcTooltip(); overlay.remove(); });
             const dlAllBtn = popup.querySelector('.gus-bc-dl-all');
-            dlAllBtn.style.display = 'none';
             overlay.appendChild(popup);
             document.body.appendChild(overlay);
 
@@ -2371,7 +2372,7 @@ The election has now been called! We need people to hand out 'How to Vote' cards
             dlAllBtn.addEventListener('click', (e) => { e.stopPropagation(); if (dlAllData) bcExportOverview(dlAllData); });
             function enableDlAll(data) {
                 dlAllData = data;
-                dlAllBtn.style.display = 'inline';
+                dlAllBtn.style.display = 'inline-block';
             }
 
             function addRefreshBtn(data) {
