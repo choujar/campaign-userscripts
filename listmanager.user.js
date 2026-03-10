@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         List Manager Tweaks
 // @namespace    https://github.com/choujar/campaign-userscripts
-// @version      1.40.1
+// @version      1.40.2
 // @description  UX improvements for List Manager and Rocket
 // @author       Sahil Choujar
 // @match        https://listmanager.greens.org.au/*
@@ -2013,7 +2013,7 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                 if (b.priority !== a.priority) return b.priority - a.priority;
                 return a.name.localeCompare(b.name);
             });
-            const ppBooths = electorate.booths.filter(b => b.isPrepoll).sort((a, b) => a.name.localeCompare(b.name) || a.prepollDay - b.prepollDay);
+            const ppBooths = electorate.booths.filter(b => b.isPrepoll).sort((a, b) => a.name.localeCompare(b.name) || b.prepollDay - a.prepollDay);
             const booths = [...edBooths, ...ppBooths];
             const headers = ['Booth', 'Need', ...BOOTH_TIME_SLOTS.map(s => s.label), '%'];
             const rows = [];
@@ -2194,7 +2194,7 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                     if (b.priority !== a.priority) return b.priority - a.priority;
                     return a.name.localeCompare(b.name);
                 });
-                const ppBooths = electorate.booths.filter(b => b.isPrepoll).sort((a, b) => a.name.localeCompare(b.name) || a.prepollDay - b.prepollDay);
+                const ppBooths = electorate.booths.filter(b => b.isPrepoll).sort((a, b) => a.name.localeCompare(b.name) || b.prepollDay - a.prepollDay);
                 const booths = [...edBooths, ...ppBooths];
 
                 const frag = document.createDocumentFragment();
