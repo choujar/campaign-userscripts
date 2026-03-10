@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         List Manager Tweaks
 // @namespace    https://github.com/choujar/campaign-userscripts
-// @version      1.39.4
+// @version      1.39.5
 // @description  UX improvements for List Manager and Rocket
 // @author       Sahil Choujar
 // @match        https://listmanager.greens.org.au/*
@@ -1139,6 +1139,7 @@ The election has now been called! We need people to hand out 'How to Vote' cards
         let evConfirmed = null;
         let evSelfRostered = null;
         let evHeysen = null;
+        let _rosterEntities = {};
         let pdCaptains = null;
         let evCaptains = null;
         const CAPTAIN_COLOR = '#e65100';
@@ -1361,59 +1362,61 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                 if (callback) callback(pdConfirmed, rosterError);
             }
 
-            fetchOneRoster(buildTotalTree(), function(count, err) {
+            _rosterEntities = {};
+
+            fetchOneRoster(buildTotalTree(), function(count, err, entities) {
                 if (err === 'auth_expired') { authExpired = true; }
                 else if (err) { rosterError = err; }
-                else { pdConfirmed = count; }
+                else { pdConfirmed = count; _rosterEntities.pdConfirmed = entities || []; }
                 checkDone();
             });
 
-            fetchOneRoster(buildSelfRosteredTree(), function(count, err) {
+            fetchOneRoster(buildSelfRosteredTree(), function(count, err, entities) {
                 if (err === 'auth_expired') { authExpired = true; }
                 else if (err) { if (!rosterError) rosterError = err; }
-                else { pdSelfRostered = count; }
+                else { pdSelfRostered = count; _rosterEntities.pdSelfRostered = entities || []; }
                 checkDone();
             });
 
-            fetchOneRoster(buildPdHeysenTree(), function(count, err) {
+            fetchOneRoster(buildPdHeysenTree(), function(count, err, entities) {
                 if (err === 'auth_expired') { authExpired = true; }
                 else if (err) { if (!rosterError) rosterError = err; }
-                else { pdHeysen = count; }
+                else { pdHeysen = count; _rosterEntities.pdHeysen = entities || []; }
                 checkDone();
             });
 
-            fetchOneRoster(buildEvConfirmedTree(), function(count, err) {
+            fetchOneRoster(buildEvConfirmedTree(), function(count, err, entities) {
                 if (err === 'auth_expired') { authExpired = true; }
                 else if (err) { if (!rosterError) rosterError = err; }
-                else { evConfirmed = count; }
+                else { evConfirmed = count; _rosterEntities.evConfirmed = entities || []; }
                 checkDone();
             });
 
-            fetchOneRoster(buildEvSelfRosteredTree(), function(count, err) {
+            fetchOneRoster(buildEvSelfRosteredTree(), function(count, err, entities) {
                 if (err === 'auth_expired') { authExpired = true; }
                 else if (err) { if (!rosterError) rosterError = err; }
-                else { evSelfRostered = count; }
+                else { evSelfRostered = count; _rosterEntities.evSelfRostered = entities || []; }
                 checkDone();
             });
 
-            fetchOneRoster(buildEvHeysenTree(), function(count, err) {
+            fetchOneRoster(buildEvHeysenTree(), function(count, err, entities) {
                 if (err === 'auth_expired') { authExpired = true; }
                 else if (err) { if (!rosterError) rosterError = err; }
-                else { evHeysen = count; }
+                else { evHeysen = count; _rosterEntities.evHeysen = entities || []; }
                 checkDone();
             });
 
-            fetchOneRoster(buildPdCaptainsTree(), function(count, err) {
+            fetchOneRoster(buildPdCaptainsTree(), function(count, err, entities) {
                 if (err === 'auth_expired') { authExpired = true; }
                 else if (err) { if (!rosterError) rosterError = err; }
-                else { pdCaptains = count; }
+                else { pdCaptains = count; _rosterEntities.pdCaptains = entities || []; }
                 checkDone();
             });
 
-            fetchOneRoster(buildEvCaptainsTree(), function(count, err) {
+            fetchOneRoster(buildEvCaptainsTree(), function(count, err, entities) {
                 if (err === 'auth_expired') { authExpired = true; }
                 else if (err) { if (!rosterError) rosterError = err; }
-                else { evCaptains = count; }
+                else { evCaptains = count; _rosterEntities.evCaptains = entities || []; }
                 checkDone();
             });
         }
@@ -2463,6 +2466,7 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                         <span><span class="gus-dot" style="background:${CAPTAIN_COLOR};"></span>Capt</span>
                     </div>
                     <button class="gus-bc-btn" style="margin-top:6px;" title="Booth Coverage Dashboard">Booth Coverage</button>
+                    <button class="gus-roster-dump-btn" style="margin-top:4px;font-size:10px;cursor:pointer;background:none;border:1px solid #ccc;border-radius:4px;padding:2px 6px;color:#999;" title="Download roster entity data for analysis">Dump Roster Data</button>
                 `;
                 attachRingHover(widget);
 
@@ -2470,6 +2474,23 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                 if (bcBtn && !bcBtn.dataset.gusClick) {
                     bcBtn.dataset.gusClick = '1';
                     bcBtn.addEventListener('click', () => openBoothCoverageModal());
+                }
+
+                const dumpBtn = body.querySelector('.gus-roster-dump-btn');
+                if (dumpBtn && !dumpBtn.dataset.gusClick) {
+                    dumpBtn.dataset.gusClick = '1';
+                    dumpBtn.addEventListener('click', () => {
+                        const dump = {
+                            timestamp: new Date().toISOString(),
+                            counts: { pdConfirmed, pdSelfRostered, pdHeysen, evConfirmed, evSelfRostered, evHeysen, pdCaptains, evCaptains },
+                            entities: _rosterEntities
+                        };
+                        const blob = new Blob([JSON.stringify(dump, null, 2)], { type: 'application/json' });
+                        const a = document.createElement('a');
+                        a.href = URL.createObjectURL(blob);
+                        a.download = 'roster-entities-dump.json';
+                        a.click();
+                    });
                 }
 
                 const ring = widget.querySelector('.gus-roster-ring');
