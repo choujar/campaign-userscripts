@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         List Manager Tweaks
 // @namespace    https://github.com/choujar/campaign-userscripts
-// @version      1.40.3
+// @version      1.40.4
 // @description  UX improvements for List Manager and Rocket
 // @author       Sahil Choujar
 // @match        https://listmanager.greens.org.au/*
@@ -2434,7 +2434,6 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                         <span><span class="gus-dot" style="background:${CAPTAIN_COLOR};"></span>Capt</span>
                     </div>
                     <button class="gus-bc-btn" style="margin-top:6px;" title="Booth Coverage Dashboard">Booth Coverage</button>
-                    <button class="gus-roster-dump-btn" style="margin-top:4px;font-size:10px;cursor:pointer;background:none;border:1px solid #ccc;border-radius:4px;padding:2px 6px;color:#999;" title="Download roster entity data for analysis">Dump Roster Data</button>
                 `;
                 attachRingHover(widget);
 
@@ -2442,23 +2441,6 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                 if (bcBtn && !bcBtn.dataset.gusClick) {
                     bcBtn.dataset.gusClick = '1';
                     bcBtn.addEventListener('click', () => openBoothCoverageModal());
-                }
-
-                const dumpBtn = body.querySelector('.gus-roster-dump-btn');
-                if (dumpBtn && !dumpBtn.dataset.gusClick) {
-                    dumpBtn.dataset.gusClick = '1';
-                    dumpBtn.addEventListener('click', () => {
-                        const dump = {
-                            timestamp: new Date().toISOString(),
-                            counts: { pdTotal, pdHeysen, evTotal, evHeysen, pdCaptains, evCaptains, grandTotal: _grandTotal },
-                            entities: _rosterEntities
-                        };
-                        const blob = new Blob([JSON.stringify(dump, null, 2)], { type: 'application/json' });
-                        const a = document.createElement('a');
-                        a.href = URL.createObjectURL(blob);
-                        a.download = 'roster-entities-dump.json';
-                        a.click();
-                    });
                 }
 
                 const ring = widget.querySelector('.gus-roster-ring');
