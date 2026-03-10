@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         List Manager Tweaks
 // @namespace    https://github.com/choujar/campaign-userscripts
-// @version      1.40.4
+// @version      1.41.0
 // @description  UX improvements for List Manager and Rocket
 // @author       Sahil Choujar
 // @match        https://listmanager.greens.org.au/*
@@ -704,7 +704,28 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                 padding: 6px 8px;
                 font-size: 12px;
                 background: #fafafa;
+                position: sticky;
+                bottom: 0;
+                z-index: 2;
+                box-shadow: 0 -2px 0 #e0e0e0;
             }
+            .gus-bc-filter-bar {
+                display: flex;
+                gap: 4px;
+                margin-bottom: 10px;
+            }
+            .gus-bc-filter-btn {
+                background: none;
+                border: 1px solid #ddd;
+                border-radius: 4px;
+                cursor: pointer;
+                font-size: 11px;
+                padding: 3px 10px;
+                color: #666;
+                transition: background 0.15s, color 0.15s, border-color 0.15s;
+            }
+            .gus-bc-filter-btn:hover { background: #f5f5f5; color: #333; }
+            .gus-bc-filter-btn.active { background: #333; color: #fff; border-color: #333; }
             .gus-bc-booth-row td {
                 padding: 3px 8px;
                 border-bottom: 1px solid #f0f0f0;
@@ -1755,14 +1776,9 @@ The election has now been called! We need people to hand out 'How to Vote' cards
             }));
         }
 
-        let _lastRawPPBooths = [];
         function parseBooths(commands) {
             if (!commands || !commands.booths) return [];
             const allBooths = commands.booths.filter(b => b.info && b.info.defunct !== '1');
-            _lastRawPPBooths.push(...allBooths.filter(b => b.info.prepoll !== '0').map(b => ({
-                name: b.info.premises || b.info.name, id: b.info.id,
-                prepoll: b.info.prepoll, info: { ...b.info }, slots: b.slots
-            })));
 
             const edBooths = allBooths.filter(b => b.info.prepoll === '0').map(b => {
                 const info = b.info;
@@ -2099,13 +2115,23 @@ The election has now been called! We need people to hand out 'How to Vote' cards
         }
 
         let bcExpandedEids = new Set();
+        let bcFilterMode = 'all'; // 'all' | 'ed' | 'pp'
+
+        function bcFilterResults(results, mode) {
+            if (mode === 'all') return results;
+            return results.map(r => {
+                const filtered = r.booths.filter(b => mode === 'pp' ? b.isPrepoll : !b.isPrepoll);
+                return { ...r, booths: filtered, summary: computeElectorateSummary(filtered) };
+            }).filter(r => r.booths.length > 0);
+        }
 
         function renderCoverageTable(results, tableEl, statusEl) {
-            const sorted = bcSortResults(results);
+            const filtered = bcFilterResults(results, bcFilterMode);
+            const sorted = bcSortResults(filtered);
 
             const grandSlots = BOOTH_TIME_SLOTS.map((_, si) => {
                 let have = 0, need = 0, capped = 0;
-                for (const r of results) {
+                for (const r of filtered) {
                     const ss = r.summary.slotSummaries[si];
                     have += ss.totalHave;
                     need += ss.totalNeed;
@@ -2113,13 +2139,14 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                 }
                 return { have, need, capped };
             });
-            const grandBooths = results.reduce((s, r) => s + r.summary.totalBooths, 0);
+            const grandBooths = filtered.reduce((s, r) => s + r.summary.totalBooths, 0);
             const grandCapped = grandSlots.reduce((s, v) => s + v.capped, 0);
             const grandNeed = grandSlots.reduce((s, v) => s + v.need, 0);
             const grandPct = grandNeed > 0 ? Math.round((grandCapped / grandNeed) * 100) : 100;
 
             if (statusEl) {
-                statusEl.innerHTML = `${results.length} electorates \u00b7 ${grandBooths} booths \u00b7 <span class="${bcPctClass(grandPct)}">${grandPct}% coverage</span>`;
+                const modeLabel = bcFilterMode === 'ed' ? 'Election Day' : bcFilterMode === 'pp' ? 'Pre-poll' : 'All';
+                statusEl.innerHTML = `${filtered.length} electorates \u00b7 ${grandBooths} booths \u00b7 <span class="${bcPctClass(grandPct)}">${grandPct}% coverage</span>` + (bcFilterMode !== 'all' ? ` (${modeLabel})` : '');
             }
 
             const arrow = (col) => bcSortCol === col ? (bcSortAsc ? ' \u25B2' : ' \u25BC') : '';
@@ -2147,7 +2174,7 @@ The election has now been called! We need people to hand out 'How to Vote' cards
             }
 
             html += '</tbody>';
-            if (results.length > 1) {
+            if (filtered.length > 1) {
                 html += '<tfoot><tr style="border-top:2px solid #333;font-weight:bold;">';
                 html += `<td>All Electorates</td>`;
                 html += `<td>${grandBooths}</td>`;
@@ -2303,8 +2330,12 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                 <div class="gus-bc-header">
                     <span class="gus-bc-title">Booth Coverage</span>
                     <span class="gus-bc-dl-all" title="Download overview image" style="cursor:pointer;margin-left:8px;font-size:14px;opacity:0.5;">&#x2B07;</span>
-                    <span class="gus-bc-dump-pp" title="Dump pre-poll data (debug)" style="cursor:pointer;margin-left:8px;font-size:11px;opacity:0.4;color:#999;">PP&#x1F4BE;</span>
                     <span class="gus-bc-close" title="Close">&times;</span>
+                </div>
+                <div class="gus-bc-filter-bar">
+                    <button class="gus-bc-filter-btn${bcFilterMode === 'all' ? ' active' : ''}" data-mode="all">All</button>
+                    <button class="gus-bc-filter-btn${bcFilterMode === 'ed' ? ' active' : ''}" data-mode="ed">Election Day</button>
+                    <button class="gus-bc-filter-btn${bcFilterMode === 'pp' ? ' active' : ''}" data-mode="pp">Pre-poll</button>
                 </div>
                 <div class="gus-bc-summary"></div>
                 <div class="gus-bc-status"><span class="gus-spinner"></span> Loading...</div>
@@ -2313,14 +2344,6 @@ The election has now been called! We need people to hand out 'How to Vote' cards
             `;
 
             popup.querySelector('.gus-bc-close').addEventListener('click', () => { hideBcTooltip(); overlay.remove(); });
-            popup.querySelector('.gus-bc-dump-pp').addEventListener('click', (e) => {
-                e.stopPropagation();
-                const blob = new Blob([JSON.stringify(_lastRawPPBooths, null, 2)], { type: 'application/json' });
-                const a = document.createElement('a');
-                a.href = URL.createObjectURL(blob);
-                a.download = 'prepoll-raw-data.json';
-                a.click();
-            });
             const dlAllBtn = popup.querySelector('.gus-bc-dl-all');
             dlAllBtn.style.display = 'none';
             overlay.appendChild(popup);
@@ -2330,6 +2353,15 @@ The election has now been called! We need people to hand out 'How to Vote' cards
             const statusEl = popup.querySelector('.gus-bc-status');
             const summaryEl = popup.querySelector('.gus-bc-summary');
             const actionsEl = popup.querySelector('.gus-bc-actions');
+
+            let bcCurrentResults = null;
+            popup.querySelectorAll('.gus-bc-filter-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    bcFilterMode = btn.dataset.mode;
+                    popup.querySelectorAll('.gus-bc-filter-btn').forEach(b => b.classList.toggle('active', b.dataset.mode === bcFilterMode));
+                    if (bcCurrentResults) renderCoverageTable(bcCurrentResults, tableEl, summaryEl);
+                });
+            });
 
             const BC_CACHE_TTL = 30 * 60 * 1000;
             function enableDlAll(data) {
@@ -2348,6 +2380,7 @@ The election has now been called! We need people to hand out 'How to Vote' cards
             }
 
             function showComplete(results, timestamp) {
+                bcCurrentResults = results;
                 renderCoverageTable(results, tableEl, summaryEl);
                 statusEl.innerHTML = `${results.length} electorates loaded \u2014 ${bcCacheAgeText(timestamp)}`;
                 enableDlAll(results);
@@ -2358,6 +2391,7 @@ The election has now been called! We need people to hand out 'How to Vote' cards
             function onBcProgress(state) {
                 if (!overlay.isConnected) return;
                 if (state.loaded >= state.total) {
+                    bcCurrentResults = state.results;
                     renderCoverageTable(state.results, tableEl, summaryEl);
                     if (state.results.length === 0 && state.authFails > 0) {
                         statusEl.innerHTML = '';
@@ -2369,6 +2403,7 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                     enableDlAll(state.results);
                     addRefreshBtn(state.results);
                 } else {
+                    bcCurrentResults = state.results;
                     statusEl.textContent = `Loading ${state.loaded} / ${state.total}...`;
                     if (!bcRenderScheduled) {
                         bcRenderScheduled = true;
