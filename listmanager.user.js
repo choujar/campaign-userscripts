@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         List Manager Tweaks
 // @namespace    https://github.com/choujar/campaign-userscripts
-// @version      1.40.2
+// @version      1.40.3
 // @description  UX improvements for List Manager and Rocket
 // @author       Sahil Choujar
 // @match        https://listmanager.greens.org.au/*
@@ -1668,13 +1668,12 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                         fetchOneRoster(buildElectorateTree(id), function(count, err, entities) {
                             state.loaded++;
                             state.results.push({ name, id, count: count ?? 0, entities: entities || [] });
-                            for (const cb of state.callbacks) cb(state);
                             if (state.loaded >= state.total) {
                                 saveElectorateOrder(state.results);
                                 breakdownCache = { results: [...state.results], timestamp: Date.now() };
                                 breakdownLoading = null;
-                                for (const cb of state.callbacks) cb(state);
                             }
+                            for (const cb of state.callbacks) cb(state);
                         });
                     }, i * 40);
                 });
