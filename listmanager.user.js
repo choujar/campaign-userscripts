@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         List Manager Tweaks
 // @namespace    https://github.com/choujar/campaign-userscripts
-// @version      1.42.1
+// @version      1.42.2
 // @description  UX improvements for List Manager and Rocket
 // @author       Sahil Choujar
 // @match        https://listmanager.greens.org.au/*
@@ -743,6 +743,9 @@ The election has now been called! We need people to hand out 'How to Vote' cards
             }
             .gus-bc-booth-row td:first-child { padding-left: 28px; }
             .gus-bc-booth-row:hover { background: #fafafa; }
+            .gus-bc-booth-row.gus-bc-unstaffed td { color: #aab; }
+            .gus-bc-booth-row.gus-bc-unstaffed:hover { background: #f5f6fa; }
+            .gus-bc-unstaffed-tag { background: #e3e8f0; color: #7889a0; font-size: 9px; font-weight: 600; padding: 1px 4px; border-radius: 3px; margin-right: 3px; }
             .gus-bc-priority { color: #f57c00; font-size: 10px; letter-spacing: -1px; margin-right: 4px; }
             .gus-bc-pp-tag { background: #e8eaf6; color: #3949ab; font-size: 9px; font-weight: 700; padding: 1px 4px; border-radius: 3px; margin-right: 3px; }
             .gus-bc-tooltip {
@@ -2255,15 +2258,18 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                 const frag = document.createDocumentFragment();
                 for (const booth of booths) {
                     const tr = document.createElement('tr');
-                    tr.className = 'gus-bc-booth-row';
+                    const isUnstaffed = booth.peopleRequired === 0;
+                    tr.className = 'gus-bc-booth-row' + (isUnstaffed ? ' gus-bc-unstaffed' : '');
                     tr.dataset.parent = eid;
                     const ppTag = booth.isPrepoll ? `<span class="gus-bc-pp-tag">PP</span> ` : '';
                     const ppDays = booth.isPrepoll ? ` <span style="color:#aaa;font-size:9px;">${PREPOLL_DATE_LABELS[booth.prepollDay] || 'Day ' + booth.prepollDay}</span>` : '';
-                    const starLabel = booth.isPrepoll ? '' : `<span class="gus-bc-priority">${PRIORITY_STARS[booth.priority] || '\u2605'}</span>`;
-                    let cells = `<td>${starLabel}${ppTag}${escapeHtml(booth.name)}${ppDays}</td>`;
-                    const needLabel = booth.isPrepoll
-                        ? `<span title="${PREPOLL_DATE_LABELS[booth.prepollDay] || 'Prepoll Day ' + booth.prepollDay}">${booth.peopleRequired}</span>`
-                        : String(booth.peopleRequired);
+                    const unstaffedTag = isUnstaffed ? '<span class="gus-bc-unstaffed-tag">\u0394</span>' : '';
+                    const starLabel = booth.isPrepoll ? '' : (isUnstaffed ? '' : `<span class="gus-bc-priority">${PRIORITY_STARS[booth.priority] || '\u2605'}</span>`);
+                    let cells = `<td>${starLabel}${unstaffedTag}${ppTag}${escapeHtml(booth.name)}${ppDays}</td>`;
+                    const needLabel = isUnstaffed ? '\u2014'
+                        : booth.isPrepoll
+                            ? `<span title="${PREPOLL_DATE_LABELS[booth.prepollDay] || 'Prepoll Day ' + booth.prepollDay}">${booth.peopleRequired}</span>`
+                            : String(booth.peopleRequired);
                     cells += `<td style="font-size:10px;color:#999;" title="${escapeHtml(booth.premises || '')}">${needLabel}</td>`;
                     for (let si = 0; si < BOOTH_TIME_SLOTS.length; si++) {
                         const sc = booth.slotCoverage[si];
@@ -2271,10 +2277,13 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                         const label = sc.need === 0 ? '\u00b7' : `${sc.have}/${sc.need}`;
                         cells += `<td><span class="gus-bc-slot ${cls}" data-si="${si}" data-bid="${booth.id}">${label}</span></td>`;
                     }
-                    const boothPct = booth.peopleRequired > 0
-                        ? Math.min(100, Math.round(booth.slotCoverage.reduce((s, c) => s + Math.min(c.have, c.need), 0) / (booth.slotCoverage.filter(c => c.need > 0).length * booth.peopleRequired || 1) * 100))
-                        : 100;
-                    const boothPctLabel = `<span class="${bcPctClass(boothPct)}">${boothPct}%</span>`;
+                    let boothPctLabel;
+                    if (isUnstaffed) {
+                        boothPctLabel = '<span style="color:#aab;">\u2014</span>';
+                    } else {
+                        const boothPct = Math.min(100, Math.round(booth.slotCoverage.reduce((s, c) => s + Math.min(c.have, c.need), 0) / (booth.slotCoverage.filter(c => c.need > 0).length * booth.peopleRequired || 1) * 100));
+                        boothPctLabel = `<span class="${bcPctClass(boothPct)}">${boothPct}%</span>`;
+                    }
                     cells += `<td class="gus-bc-pct">${boothPctLabel}</td>`;
                     tr.innerHTML = cells;
 
