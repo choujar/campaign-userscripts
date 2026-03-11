@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         List Manager Tweaks
 // @namespace    https://github.com/choujar/campaign-userscripts
-// @version      1.41.2
+// @version      1.41.3
 // @description  UX improvements for List Manager and Rocket
 // @author       Sahil Choujar
 // @match        https://listmanager.greens.org.au/*
@@ -2068,8 +2068,10 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                 totalCells.push({ text: s.overallPct + '%', align: 'right', bold: true, color: bcPctColor(s.overallPct) });
                 rows.push({ cells: totalCells, divider: true });
             }
-            const canvas = bcDrawTableToCanvas('Booth Coverage \u2014 ' + electorate.name, headers, rows);
-            bcDownloadCanvas(canvas, 'booth-coverage-' + electorate.name.toLowerCase().replace(/\s+/g, '-') + '.png');
+            const modeLabel = bcFilterMode === 'ed' ? ' (Election Day)' : bcFilterMode === 'pp' ? ' (Pre-poll)' : '';
+            const modeSuffix = bcFilterMode === 'ed' ? '-election-day' : bcFilterMode === 'pp' ? '-prepoll' : '';
+            const canvas = bcDrawTableToCanvas('Booth Coverage \u2014 ' + electorate.name + modeLabel, headers, rows);
+            bcDownloadCanvas(canvas, 'booth-coverage-' + electorate.name.toLowerCase().replace(/\s+/g, '-') + modeSuffix + '.png');
         }
 
         function minsToTime(mins) {
@@ -2165,7 +2167,7 @@ The election has now been called! We need people to hand out 'How to Vote' cards
             for (const r of sorted) {
                 const s = r.summary;
                 html += `<tr class="gus-bc-row" data-eid="${r.id}">`;
-                html += `<td><span class="gus-bc-expand-icon">\u25B6</span> ${escapeHtml(r.name)} <span class="gus-bc-dl-btn" data-eid="${r.id}" title="Download image" style="cursor:pointer;opacity:0.3;font-size:10px;">\u2B07</span></td>`;
+                html += `<td><span class="gus-bc-expand-icon">\u25B6</span> ${escapeHtml(r.name)} <span class="gus-bc-dl-btn" data-eid="${r.id}" title="Download image" style="cursor:pointer;opacity:0.3;font-size:10px;">\uD83D\uDCF7</span></td>`;
                 html += `<td>${s.totalBooths}</td>`;
                 for (let si = 0; si < BOOTH_TIME_SLOTS.length; si++) {
                     const ss = s.slotSummaries[si];
@@ -2333,7 +2335,7 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                 <div class="gus-bc-header">
                     <span style="display:flex;align-items:center;gap:8px;">
                         <span class="gus-bc-title">Booth Coverage</span>
-                        <span class="gus-bc-dl-all gus-bc-btn" title="Download overview image" style="cursor:pointer;font-size:11px;display:none;">&#x2B07; PNG</span>
+                        <span class="gus-bc-dl-all gus-bc-btn" title="Download overview image" style="cursor:pointer;font-size:11px;display:none;">&#x1F4F7; PNG</span>
                     </span>
                     <span class="gus-bc-close" title="Close">&times;</span>
                 </div>
