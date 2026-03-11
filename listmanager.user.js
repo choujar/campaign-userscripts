@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         List Manager Tweaks
 // @namespace    https://github.com/choujar/campaign-userscripts
-// @version      1.41.3
+// @version      1.42.0
 // @description  UX improvements for List Manager and Rocket
 // @author       Sahil Choujar
 // @match        https://listmanager.greens.org.au/*
@@ -726,6 +726,15 @@ The election has now been called! We need people to hand out 'How to Vote' cards
             }
             .gus-bc-filter-btn:hover { background: #f5f5f5; color: #333; }
             .gus-bc-filter-btn.active { background: #333; color: #fff; border-color: #333; }
+            .gus-bc-pp-day-select {
+                font-size: 11px;
+                padding: 3px 6px;
+                border: 1px solid #ddd;
+                border-radius: 4px;
+                color: #333;
+                background: #fff;
+                cursor: pointer;
+            }
             .gus-bc-booth-row td {
                 padding: 3px 8px;
                 border-bottom: 1px solid #f0f0f0;
@@ -1984,8 +1993,12 @@ The election has now been called! We need people to hand out 'How to Vote' cards
         function bcExportOverview(results) {
             const filtered = bcFilterResults(results, bcFilterMode);
             const sorted = bcSortResults(filtered);
-            const modeLabel = bcFilterMode === 'ed' ? ' (Election Day)' : bcFilterMode === 'pp' ? ' (Pre-poll)' : '';
-            const modeSuffix = bcFilterMode === 'ed' ? '-election-day' : bcFilterMode === 'pp' ? '-prepoll' : '';
+            let modeLabel = bcFilterMode === 'ed' ? ' (Election Day)' : bcFilterMode === 'pp' ? ' (Pre-poll)' : '';
+            let modeSuffix = bcFilterMode === 'ed' ? '-election-day' : bcFilterMode === 'pp' ? '-prepoll' : '';
+            if (bcFilterMode === 'pp' && bcFilterPPDay !== null) {
+                modeLabel = ` (${PREPOLL_DATE_LABELS[bcFilterPPDay]})`;
+                modeSuffix = '-pp-day' + bcFilterPPDay;
+            }
             const headers = ['Electorate', 'Booths', ...BOOTH_TIME_SLOTS.map(s => s.label), '%'];
             const rows = [];
             for (const r of sorted) {
@@ -2068,8 +2081,12 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                 totalCells.push({ text: s.overallPct + '%', align: 'right', bold: true, color: bcPctColor(s.overallPct) });
                 rows.push({ cells: totalCells, divider: true });
             }
-            const modeLabel = bcFilterMode === 'ed' ? ' (Election Day)' : bcFilterMode === 'pp' ? ' (Pre-poll)' : '';
-            const modeSuffix = bcFilterMode === 'ed' ? '-election-day' : bcFilterMode === 'pp' ? '-prepoll' : '';
+            let modeLabel = bcFilterMode === 'ed' ? ' (Election Day)' : bcFilterMode === 'pp' ? ' (Pre-poll)' : '';
+            let modeSuffix = bcFilterMode === 'ed' ? '-election-day' : bcFilterMode === 'pp' ? '-prepoll' : '';
+            if (bcFilterMode === 'pp' && bcFilterPPDay !== null) {
+                modeLabel = ` (${PREPOLL_DATE_LABELS[bcFilterPPDay]})`;
+                modeSuffix = '-pp-day' + bcFilterPPDay;
+            }
             const canvas = bcDrawTableToCanvas('Booth Coverage \u2014 ' + electorate.name + modeLabel, headers, rows);
             bcDownloadCanvas(canvas, 'booth-coverage-' + electorate.name.toLowerCase().replace(/\s+/g, '-') + modeSuffix + '.png');
         }
@@ -2121,11 +2138,17 @@ The election has now been called! We need people to hand out 'How to Vote' cards
 
         let bcExpandedEids = new Set();
         let bcFilterMode = 'all'; // 'all' | 'ed' | 'pp'
+        let bcFilterPPDay = null; // null = all PP days, or a prepollDay number
 
         function bcFilterResults(results, mode) {
             if (mode === 'all') return results;
             return results.map(r => {
-                const filtered = r.booths.filter(b => mode === 'pp' ? b.isPrepoll : !b.isPrepoll);
+                const filtered = r.booths.filter(b => {
+                    if (mode === 'ed') return !b.isPrepoll;
+                    if (!b.isPrepoll) return false;
+                    if (bcFilterPPDay !== null) return b.prepollDay === bcFilterPPDay;
+                    return true;
+                });
                 return { ...r, booths: filtered, summary: computeElectorateSummary(filtered) };
             }).filter(r => r.booths.length > 0);
         }
@@ -2150,8 +2173,9 @@ The election has now been called! We need people to hand out 'How to Vote' cards
             const grandPct = grandNeed > 0 ? Math.round((grandCapped / grandNeed) * 100) : 100;
 
             if (statusEl) {
-                const modeLabel = bcFilterMode === 'ed' ? 'Election Day' : bcFilterMode === 'pp' ? 'Pre-poll' : 'All';
-                statusEl.innerHTML = `${filtered.length} electorates \u00b7 ${grandBooths} booths \u00b7 <span class="${bcPctClass(grandPct)}">${grandPct}% coverage</span>` + (bcFilterMode !== 'all' ? ` (${modeLabel})` : '');
+                let modeLabel = bcFilterMode === 'ed' ? 'Election Day' : bcFilterMode === 'pp' ? 'Pre-poll' : '';
+                if (bcFilterMode === 'pp' && bcFilterPPDay !== null) modeLabel = PREPOLL_DATE_LABELS[bcFilterPPDay] || modeLabel;
+                statusEl.innerHTML = `${filtered.length} electorates \u00b7 ${grandBooths} booths \u00b7 <span class="${bcPctClass(grandPct)}">${grandPct}% coverage</span>` + (modeLabel ? ` (${modeLabel})` : '');
             }
 
             const arrow = (col) => bcSortCol === col ? (bcSortAsc ? ' \u25B2' : ' \u25BC') : '';
@@ -2343,6 +2367,10 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                     <button class="gus-bc-filter-btn${bcFilterMode === 'all' ? ' active' : ''}" data-mode="all">All</button>
                     <button class="gus-bc-filter-btn${bcFilterMode === 'ed' ? ' active' : ''}" data-mode="ed">Election Day</button>
                     <button class="gus-bc-filter-btn${bcFilterMode === 'pp' ? ' active' : ''}" data-mode="pp">Pre-poll</button>
+                    <select class="gus-bc-pp-day-select" style="display:${bcFilterMode === 'pp' ? 'inline-block' : 'none'};">
+                        <option value="">All days</option>
+                        ${[7,5,4,3,2,1].map(d => `<option value="${d}"${bcFilterPPDay === d ? ' selected' : ''}>${PREPOLL_DATE_LABELS[d]}</option>`).join('')}
+                    </select>
                 </div>
                 <div class="gus-bc-summary"></div>
                 <div class="gus-bc-status"><span class="gus-spinner"></span> Loading...</div>
@@ -2361,12 +2389,19 @@ The election has now been called! We need people to hand out 'How to Vote' cards
             const actionsEl = popup.querySelector('.gus-bc-actions');
 
             let bcCurrentResults = null;
+            const ppDaySelect = popup.querySelector('.gus-bc-pp-day-select');
             popup.querySelectorAll('.gus-bc-filter-btn').forEach(btn => {
                 btn.addEventListener('click', () => {
                     bcFilterMode = btn.dataset.mode;
+                    if (bcFilterMode !== 'pp') bcFilterPPDay = null;
+                    ppDaySelect.style.display = bcFilterMode === 'pp' ? 'inline-block' : 'none';
                     popup.querySelectorAll('.gus-bc-filter-btn').forEach(b => b.classList.toggle('active', b.dataset.mode === bcFilterMode));
                     if (bcCurrentResults) renderCoverageTable(bcCurrentResults, tableEl, summaryEl);
                 });
+            });
+            ppDaySelect.addEventListener('change', () => {
+                bcFilterPPDay = ppDaySelect.value ? parseInt(ppDaySelect.value) : null;
+                if (bcCurrentResults) renderCoverageTable(bcCurrentResults, tableEl, summaryEl);
             });
 
             const BC_CACHE_TTL = 30 * 60 * 1000;
