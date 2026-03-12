@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         List Manager Tweaks
 // @namespace    https://github.com/choujar/campaign-userscripts
-// @version      1.42.2
+// @version      1.42.3
 // @description  UX improvements for List Manager and Rocket
 // @author       Sahil Choujar
 // @match        https://listmanager.greens.org.au/*
@@ -696,6 +696,7 @@ The election has now been called! We need people to hand out 'How to Vote' cards
             .gus-bc-slot-partial { background: #fff3e0; color: #e65100; }
             .gus-bc-slot-empty { background: #ffebee; color: #c62828; }
             .gus-bc-slot-none { color: #ccc; }
+            .gus-bc-slot-mismatch { background: #f3e5f5; color: #7b1fa2; font-weight: 700; }
             .gus-bc-pct { font-weight: 600; min-width: 40px; }
             .gus-bc-pct-good { color: #2e7d32; }
             .gus-bc-pct-warn { color: #e65100; }
@@ -1852,6 +1853,7 @@ The election has now been called! We need people to hand out 'How to Vote' cards
         }
 
         function bcSlotClass(have, need) {
+            if (need === 0 && have > 0) return 'gus-bc-slot-mismatch';
             if (need === 0) return 'gus-bc-slot-none';
             if (have >= need) return 'gus-bc-slot-full';
             if (have > 0) return 'gus-bc-slot-partial';
@@ -2274,7 +2276,7 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                     for (let si = 0; si < BOOTH_TIME_SLOTS.length; si++) {
                         const sc = booth.slotCoverage[si];
                         const cls = bcSlotClass(sc.have, sc.need);
-                        const label = sc.need === 0 ? '\u00b7' : `${sc.have}/${sc.need}`;
+                        const label = sc.need === 0 ? (sc.have > 0 ? `${sc.have}!` : '\u00b7') : `${sc.have}/${sc.need}`;
                         cells += `<td><span class="gus-bc-slot ${cls}" data-si="${si}" data-bid="${booth.id}">${label}</span></td>`;
                     }
                     let boothPctLabel;
