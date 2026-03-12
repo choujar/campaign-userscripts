@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         List Manager Tweaks
 // @namespace    https://github.com/choujar/campaign-userscripts
-// @version      1.43.9
+// @version      1.44.0
 // @description  UX improvements for List Manager and Rocket
 // @author       Sahil Choujar
 // @match        https://listmanager.greens.org.au/*
@@ -1762,10 +1762,11 @@ The election has now been called! We need people to hand out 'How to Vote' cards
             let called = false;
             const once = (data, err) => { if (!called) { called = true; callback(data, err); } };
             const cmd = JSON.stringify({ requests: { electorateroster: [String(electorateId)] } });
-            const url = 'https://contact-sa.greens.org.au/agc/ajax?commands=' + encodeURIComponent(cmd);
+            const url = 'https://contact-sa.greens.org.au/agc/ajax?commands=' + encodeURIComponent(cmd) + '&_t=' + Date.now();
             GM_xmlhttpRequest({
                 method: 'GET',
                 url: url,
+                headers: { 'Cache-Control': 'no-cache' },
                 onload: function(response) {
                     if (response.status >= 300) {
                         once(null, 'not_logged_in');
