@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         List Manager Tweaks
 // @namespace    https://github.com/choujar/campaign-userscripts
-// @version      1.42.4
+// @version      1.42.5
 // @description  UX improvements for List Manager and Rocket
 // @author       Sahil Choujar
 // @match        https://listmanager.greens.org.au/*
@@ -1821,7 +1821,7 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                     return { have: covering.length, need, volunteers: covering };
                 });
                 return {
-                    id: info.id, name: info.premises || info.name,
+                    id: info.id, name: (info.name || '').replace(/ Early Voting Centre$/i, '') || info.premises,
                     premises: info.premises,
                     priority: parseInt(info.priority) || 1, peopleRequired: need,
                     estTotal: parseInt(info.est_total) || 0, estGreen: parseInt(info.est_green) || 0,
