@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         List Manager Tweaks
 // @namespace    https://github.com/choujar/campaign-userscripts
-// @version      1.43.4
+// @version      1.43.5
 // @description  UX improvements for List Manager and Rocket
 // @author       Sahil Choujar
 // @match        https://listmanager.greens.org.au/*
@@ -1542,11 +1542,6 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                     </div>
                     <div class="gus-breakdown-status">Loading 0 / ${ALL_ELECTORATES.length}...</div>
                     <div class="gus-breakdown-list"></div>
-                    <div style="font-size:11px;color:#aaa;margin-top:12px;line-height:1.6;border-top:1px solid #eee;padding-top:8px;">
-                        <strong style="color:#777;">Historical comparison</strong><br>
-                        vs '22: &nbsp;EV ${Math.round((evTotal ?? 0) / HIST_2022.ev * 100)}% &nbsp;&middot;&nbsp; PD ${Math.round((pdTotal ?? 0) / HIST_2022.pd * 100)}% &nbsp;&middot;&nbsp; Total ${Math.round((_grandTotal ?? ((pdTotal ?? 0) + (evTotal ?? 0))) / HIST_2022.total * 100)}%<br>
-                        vs '25: &nbsp;EV ${Math.round((evTotal ?? 0) / HIST_2025.ev * 100)}% &nbsp;&middot;&nbsp; PD ${Math.round((pdTotal ?? 0) / HIST_2025.pd * 100)}% &nbsp;&middot;&nbsp; Total ${Math.round((_grandTotal ?? ((pdTotal ?? 0) + (evTotal ?? 0))) / HIST_2025.total * 100)}%
-                    </div>
                     <div style="font-size:11px;color:#999;margin-top:12px;line-height:1.4;">
                         Note: Electorate counts include all rostered and self-rostered volunteers (any shift status, any voting period).
                         Some polling booths span multiple electorates, so volunteers at border booths may appear in multiple counts.
@@ -1660,8 +1655,15 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                 return mins === 1 ? '1 min ago' : `${mins} min ago`;
             }
 
+            function histComparisonLine() {
+                const gt = _grandTotal ?? ((pdTotal ?? 0) + (evTotal ?? 0));
+                const ev = evTotal ?? 0, pd = pdTotal ?? 0;
+                return `<div style="font-size:10px;color:#aaa;margin-top:4px;">vs '22: EV ${Math.round(ev / HIST_2022.ev * 100)}% &middot; PD ${Math.round(pd / HIST_2022.pd * 100)}% &middot; Total ${Math.round(gt / HIST_2022.total * 100)}% &nbsp;&nbsp; vs '25: EV ${Math.round(ev / HIST_2025.ev * 100)}% &middot; PD ${Math.round(pd / HIST_2025.pd * 100)}% &middot; Total ${Math.round(gt / HIST_2025.total * 100)}%</div>`;
+            }
+
             function showStatus(text, showRefresh, hint) {
-                statusEl.innerHTML = escapeHtml(text) +
+                statusEl.innerHTML = (showRefresh ? histComparisonLine() : '') +
+                    escapeHtml(text) +
                     (showRefresh ? ' <button class="gus-breakdown-refresh">Refresh</button> <button class="gus-breakdown-download">Download JSON</button>' : '') +
                     (hint ? `<div style="font-size:11px;color:#999;margin-top:4px;">${escapeHtml(hint)}</div>` : '');
                 if (showRefresh) {
