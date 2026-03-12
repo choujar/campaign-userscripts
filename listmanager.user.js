@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         List Manager Tweaks
 // @namespace    https://github.com/choujar/campaign-userscripts
-// @version      1.43.8
+// @version      1.43.9
 // @description  UX improvements for List Manager and Rocket
 // @author       Sahil Choujar
 // @match        https://listmanager.greens.org.au/*
@@ -2181,6 +2181,71 @@ The election has now been called! We need people to hand out 'How to Vote' cards
             }).filter(r => r.booths.length > 0);
         }
 
+        function expandElectorateRow(row, sorted) {
+            const eid = row.dataset.eid;
+            row.classList.add('gus-bc-row-expanded');
+            bcExpandedEids.add(eid);
+            const electorate = sorted.find(r => String(r.id) === eid);
+            if (!electorate) return;
+
+            const edBooths = electorate.booths.filter(b => !b.isPrepoll).sort((a, b) => {
+                if (b.priority !== a.priority) return b.priority - a.priority;
+                return a.name.localeCompare(b.name);
+            });
+            const ppBooths = electorate.booths.filter(b => b.isPrepoll).sort((a, b) => a.name.localeCompare(b.name) || b.prepollDay - a.prepollDay);
+            const booths = [...edBooths, ...ppBooths];
+
+            const frag = document.createDocumentFragment();
+            for (const booth of booths) {
+                const tr = document.createElement('tr');
+                const isUnstaffed = booth.peopleRequired === 0;
+                tr.className = 'gus-bc-booth-row' + (isUnstaffed ? ' gus-bc-unstaffed' : '');
+                tr.dataset.parent = eid;
+                const ppTag = booth.isPrepoll ? `<span class="gus-bc-pp-tag">PP</span> ` : '';
+                const ppDays = booth.isPrepoll ? ` <span style="color:#aaa;font-size:9px;">${PREPOLL_DATE_LABELS[booth.prepollDay] || 'Day ' + booth.prepollDay}</span>` : '';
+                const unstaffedTag = isUnstaffed ? '<span class="gus-bc-unstaffed-tag">\u0394</span>' : '';
+                const sharedTag = booth.isShared ? '<span class="gus-bc-shared-tag" title="Shared booth">\u{1F517}</span>' : '';
+                const starLabel = booth.isPrepoll ? '' : (isUnstaffed ? '' : `<span class="gus-bc-priority">${PRIORITY_STARS[booth.priority] || '\u2605'}</span>`);
+                const displayName = booth.name.replace(/ Early Voting Centre$/i, '');
+                const tipParts = [booth.premises, booth.address].filter(Boolean);
+                const nameTip = tipParts.length ? ` title="${escapeHtml(tipParts.join('\n'))}"` : '';
+                let cells = `<td${nameTip}>${starLabel}${unstaffedTag}${sharedTag}${ppTag}${escapeHtml(displayName)}${ppDays}</td>`;
+                const needLabel = isUnstaffed ? '\u2014'
+                    : booth.isPrepoll
+                        ? `<span title="${PREPOLL_DATE_LABELS[booth.prepollDay] || 'Prepoll Day ' + booth.prepollDay}">${booth.peopleRequired}</span>`
+                        : String(booth.peopleRequired);
+                cells += `<td style="font-size:10px;color:#999;" title="${escapeHtml(booth.premises || '')}">${needLabel}</td>`;
+                for (let si = 0; si < BOOTH_TIME_SLOTS.length; si++) {
+                    const sc = booth.slotCoverage[si];
+                    const cls = bcSlotClass(sc.have, sc.need);
+                    const label = sc.need === 0 ? (sc.have > 0 ? `${sc.have}!` : '\u00b7') : `${sc.have}/${sc.need}`;
+                    cells += `<td><span class="gus-bc-slot ${cls}" data-si="${si}" data-bid="${booth.id}">${label}</span></td>`;
+                }
+                let boothPctLabel;
+                if (isUnstaffed) {
+                    boothPctLabel = '<span style="color:#aab;">\u2014</span>';
+                } else {
+                    const boothPct = Math.min(100, Math.round(booth.slotCoverage.reduce((s, c) => s + Math.min(c.have, c.need), 0) / (booth.slotCoverage.filter(c => c.need > 0).length * booth.peopleRequired || 1) * 100));
+                    boothPctLabel = `<span class="${bcPctClass(boothPct)}">${boothPct}%</span>`;
+                }
+                cells += `<td class="gus-bc-pct">${boothPctLabel}</td>`;
+                tr.innerHTML = cells;
+
+                tr.querySelectorAll('.gus-bc-slot[data-bid]').forEach(span => {
+                    const si = parseInt(span.dataset.si);
+                    const bid = span.dataset.bid;
+                    const b = booths.find(x => x.id === bid);
+                    if (b) {
+                        span.addEventListener('mouseenter', (e) => showBcTooltip(e, b.slotCoverage[si].volunteers));
+                        span.addEventListener('mouseleave', hideBcTooltip);
+                    }
+                });
+
+                frag.appendChild(tr);
+            }
+            row.after(frag);
+        }
+
         function renderCoverageTable(results, tableEl, statusEl) {
             const filtered = bcFilterResults(results, bcFilterMode);
             const sorted = bcSortResults(filtered);
@@ -2266,71 +2331,6 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                 btn.addEventListener('mouseleave', () => { btn.style.opacity = '0.3'; });
             });
 
-            function expandElectorateRow(row, sorted) {
-                const eid = row.dataset.eid;
-                row.classList.add('gus-bc-row-expanded');
-                bcExpandedEids.add(eid);
-                const electorate = sorted.find(r => String(r.id) === eid);
-                if (!electorate) return;
-
-                const edBooths = electorate.booths.filter(b => !b.isPrepoll).sort((a, b) => {
-                    if (b.priority !== a.priority) return b.priority - a.priority;
-                    return a.name.localeCompare(b.name);
-                });
-                const ppBooths = electorate.booths.filter(b => b.isPrepoll).sort((a, b) => a.name.localeCompare(b.name) || b.prepollDay - a.prepollDay);
-                const booths = [...edBooths, ...ppBooths];
-
-                const frag = document.createDocumentFragment();
-                for (const booth of booths) {
-                    const tr = document.createElement('tr');
-                    const isUnstaffed = booth.peopleRequired === 0;
-                    tr.className = 'gus-bc-booth-row' + (isUnstaffed ? ' gus-bc-unstaffed' : '');
-                    tr.dataset.parent = eid;
-                    const ppTag = booth.isPrepoll ? `<span class="gus-bc-pp-tag">PP</span> ` : '';
-                    const ppDays = booth.isPrepoll ? ` <span style="color:#aaa;font-size:9px;">${PREPOLL_DATE_LABELS[booth.prepollDay] || 'Day ' + booth.prepollDay}</span>` : '';
-                    const unstaffedTag = isUnstaffed ? '<span class="gus-bc-unstaffed-tag">\u0394</span>' : '';
-                    const sharedTag = booth.isShared ? '<span class="gus-bc-shared-tag" title="Shared booth">\u{1F517}</span>' : '';
-                    const starLabel = booth.isPrepoll ? '' : (isUnstaffed ? '' : `<span class="gus-bc-priority">${PRIORITY_STARS[booth.priority] || '\u2605'}</span>`);
-                    const displayName = booth.name.replace(/ Early Voting Centre$/i, '');
-                    const tipParts = [booth.premises, booth.address].filter(Boolean);
-                    const nameTip = tipParts.length ? ` title="${escapeHtml(tipParts.join('\n'))}"` : '';
-                    let cells = `<td${nameTip}>${starLabel}${unstaffedTag}${sharedTag}${ppTag}${escapeHtml(displayName)}${ppDays}</td>`;
-                    const needLabel = isUnstaffed ? '\u2014'
-                        : booth.isPrepoll
-                            ? `<span title="${PREPOLL_DATE_LABELS[booth.prepollDay] || 'Prepoll Day ' + booth.prepollDay}">${booth.peopleRequired}</span>`
-                            : String(booth.peopleRequired);
-                    cells += `<td style="font-size:10px;color:#999;" title="${escapeHtml(booth.premises || '')}">${needLabel}</td>`;
-                    for (let si = 0; si < BOOTH_TIME_SLOTS.length; si++) {
-                        const sc = booth.slotCoverage[si];
-                        const cls = bcSlotClass(sc.have, sc.need);
-                        const label = sc.need === 0 ? (sc.have > 0 ? `${sc.have}!` : '\u00b7') : `${sc.have}/${sc.need}`;
-                        cells += `<td><span class="gus-bc-slot ${cls}" data-si="${si}" data-bid="${booth.id}">${label}</span></td>`;
-                    }
-                    let boothPctLabel;
-                    if (isUnstaffed) {
-                        boothPctLabel = '<span style="color:#aab;">\u2014</span>';
-                    } else {
-                        const boothPct = Math.min(100, Math.round(booth.slotCoverage.reduce((s, c) => s + Math.min(c.have, c.need), 0) / (booth.slotCoverage.filter(c => c.need > 0).length * booth.peopleRequired || 1) * 100));
-                        boothPctLabel = `<span class="${bcPctClass(boothPct)}">${boothPct}%</span>`;
-                    }
-                    cells += `<td class="gus-bc-pct">${boothPctLabel}</td>`;
-                    tr.innerHTML = cells;
-
-                    tr.querySelectorAll('.gus-bc-slot[data-bid]').forEach(span => {
-                        const si = parseInt(span.dataset.si);
-                        const bid = span.dataset.bid;
-                        const b = booths.find(x => x.id === bid);
-                        if (b) {
-                            span.addEventListener('mouseenter', (e) => showBcTooltip(e, b.slotCoverage[si].volunteers));
-                            span.addEventListener('mouseleave', hideBcTooltip);
-                        }
-                    });
-
-                    frag.appendChild(tr);
-                }
-                row.after(frag);
-            }
-
             tableEl.querySelectorAll('.gus-bc-row').forEach(row => {
                 row.addEventListener('click', () => {
                     const eid = row.dataset.eid;
@@ -2398,6 +2398,7 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                     <span style="display:flex;align-items:center;gap:8px;">
                         <span class="gus-bc-title">Booth Coverage</span>
                         <span class="gus-bc-dl-all gus-bc-btn" title="Download overview image" style="cursor:pointer;font-size:11px;display:none;">&#x1F4F7; PNG</span>
+                        <span class="gus-bc-expand-all-btn gus-bc-btn" title="Expand/Collapse all electorates" style="cursor:pointer;font-size:11px;">&#x25B6; Expand All</span>
                     </span>
                     <span class="gus-bc-close" title="Close">&times;</span>
                 </div>
@@ -2418,6 +2419,26 @@ The election has now been called! We need people to hand out 'How to Vote' cards
 
             popup.querySelector('.gus-bc-close').addEventListener('click', () => { hideBcTooltip(); overlay.remove(); });
             const dlAllBtn = popup.querySelector('.gus-bc-dl-all');
+            const expandAllBtn = popup.querySelector('.gus-bc-expand-all-btn');
+            expandAllBtn.addEventListener('click', () => {
+                const tableEl2 = popup.querySelector('.gus-bc-table');
+                if (!tableEl2 || !bcCurrentResults) return;
+                const anyExpanded = bcExpandedEids.size > 0;
+                if (anyExpanded) {
+                    tableEl2.querySelectorAll('.gus-bc-booth-row').forEach(el => el.remove());
+                    tableEl2.querySelectorAll('.gus-bc-row-expanded').forEach(el => el.classList.remove('gus-bc-row-expanded'));
+                    bcExpandedEids.clear();
+                    expandAllBtn.innerHTML = '\u25B6 Expand All';
+                } else {
+                    const sorted = bcSortResults(bcFilterResults(bcCurrentResults, bcFilterMode));
+                    tableEl2.querySelectorAll('.gus-bc-row').forEach(row => {
+                        if (!row.classList.contains('gus-bc-row-expanded')) {
+                            expandElectorateRow(row, sorted);
+                        }
+                    });
+                    expandAllBtn.innerHTML = '\u25BC Collapse All';
+                }
+            });
             overlay.appendChild(popup);
             document.body.appendChild(overlay);
 
