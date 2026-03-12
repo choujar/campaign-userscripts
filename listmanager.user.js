@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         List Manager Tweaks
 // @namespace    https://github.com/choujar/campaign-userscripts
-// @version      1.43.7
+// @version      1.43.8
 // @description  UX improvements for List Manager and Rocket
 // @author       Sahil Choujar
 // @match        https://listmanager.greens.org.au/*
@@ -1659,7 +1659,18 @@ The election has now been called! We need people to hand out 'How to Vote' cards
             function histComparisonLine() {
                 const gt = _grandTotal ?? ((pdTotal ?? 0) + (evTotal ?? 0));
                 const ev = evTotal ?? 0, pd = pdTotal ?? 0;
-                return `<div style="font-size:10px;color:#aaa;margin:8px 0 4px;text-align:center;">vs '22: EV ${Math.round(ev / HIST_2022.ev * 100)}% &middot; PD ${Math.round(pd / HIST_2022.pd * 100)}% &middot; Total ${Math.round(gt / HIST_2022.total * 100)}% &nbsp;&nbsp; vs '25: EV ${Math.round(ev / HIST_2025.ev * 100)}% &middot; PD ${Math.round(pd / HIST_2025.pd * 100)}% &middot; Total ${Math.round(gt / HIST_2025.total * 100)}%</div>`;
+                const pctStyle = (v) => `font-weight:600;color:${v >= 100 ? '#2e7d32' : v >= 80 ? '#e65100' : '#c62828'}`;
+                return `<div style="font-size:10px;margin:8px 0 4px;text-align:center;line-height:1.8;">` +
+                    `<span style="color:#795548;font-weight:600;">'22 SA</span> ` +
+                    `<span style="color:${EV_COLOR};">EV</span> <span style="${pctStyle(Math.round(ev / HIST_2022.ev * 100))}">${Math.round(ev / HIST_2022.ev * 100)}%</span> &middot; ` +
+                    `<span style="color:${PD_COLOR};">PD</span> <span style="${pctStyle(Math.round(pd / HIST_2022.pd * 100))}">${Math.round(pd / HIST_2022.pd * 100)}%</span> &middot; ` +
+                    `Total <span style="${pctStyle(Math.round(gt / HIST_2022.total * 100))}">${Math.round(gt / HIST_2022.total * 100)}%</span>` +
+                    `&nbsp;&nbsp;&nbsp;` +
+                    `<span style="color:#37474f;font-weight:600;">'25 Fed</span> ` +
+                    `<span style="color:${EV_COLOR};">EV</span> <span style="${pctStyle(Math.round(ev / HIST_2025.ev * 100))}">${Math.round(ev / HIST_2025.ev * 100)}%</span> &middot; ` +
+                    `<span style="color:${PD_COLOR};">PD</span> <span style="${pctStyle(Math.round(pd / HIST_2025.pd * 100))}">${Math.round(pd / HIST_2025.pd * 100)}%</span> &middot; ` +
+                    `Total <span style="${pctStyle(Math.round(gt / HIST_2025.total * 100))}">${Math.round(gt / HIST_2025.total * 100)}%</span>` +
+                    `</div>`;
             }
 
             function showStatus(text, showRefresh, hint) {
