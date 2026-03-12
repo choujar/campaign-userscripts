@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         List Manager Tweaks
 // @namespace    https://github.com/choujar/campaign-userscripts
-// @version      1.43.0
+// @version      1.43.1
 // @description  UX improvements for List Manager and Rocket
 // @author       Sahil Choujar
 // @match        https://listmanager.greens.org.au/*
@@ -1536,6 +1536,7 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                                 <div><span style="color:${EV_COLOR};font-weight:600;">EV:</span> <strong>${(evTotal ?? 0).toLocaleString()}</strong> <span style="color:${HEYSEN_COLOR};">(${(evHeysen ?? 0).toLocaleString()})</span> <span style="color:${CAPTAIN_COLOR};">(${(evCaptains ?? 0).toLocaleString()})</span> / ${EV_TARGET.toLocaleString()} <span style="font-size:10px;color:#999;">(${Math.round((evTotal ?? 0) / HIST_2022.ev * 100)}% of '22) (${Math.round((evTotal ?? 0) / HIST_2025.ev * 100)}% of '25)</span></div>
                                 <div><span style="color:${PD_COLOR};font-weight:600;">PD:</span> <strong>${(pdTotal ?? 0).toLocaleString()}</strong> <span style="color:${HEYSEN_COLOR};">(${(pdHeysen ?? 0).toLocaleString()})</span> <span style="color:${CAPTAIN_COLOR};">(${(pdCaptains ?? 0).toLocaleString()})</span> / ${PD_TARGET.toLocaleString()} <span style="font-size:10px;color:#999;">(${Math.round((pdTotal ?? 0) / HIST_2022.pd * 100)}% of '22) (${Math.round((pdTotal ?? 0) / HIST_2025.pd * 100)}% of '25)</span></div>
                                 <div style="font-size:11px;color:#888;margin-top:2px;"><span class="gus-dot" style="background:${HEYSEN_COLOR};display:inline-block;width:7px;height:7px;border-radius:50%;"></span> Heysen &nbsp;<span class="gus-dot" style="background:${CAPTAIN_COLOR};display:inline-block;width:7px;height:7px;border-radius:50%;"></span> Capt</div>
+                                <div style="font-size:10px;color:#999;margin-top:3px;">Total: <strong style="color:#555;">${(_grandTotal ?? ((pdTotal ?? 0) + (evTotal ?? 0))).toLocaleString()}</strong> / ${TOTAL_TARGET.toLocaleString()} (${Math.round((_grandTotal ?? ((pdTotal ?? 0) + (evTotal ?? 0))) / HIST_2022.total * 100)}% of '22) (${Math.round((_grandTotal ?? ((pdTotal ?? 0) + (evTotal ?? 0))) / HIST_2025.total * 100)}% of '25)</div>
                             </div>
                         </div>
                     </div>
@@ -2524,6 +2525,7 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                     <div class="gus-roster-count">
                         <div><span style="color:${EV_COLOR};font-weight:600;">EV:</span> <strong>${(evTotal ?? 0).toLocaleString()}</strong> <span style="color:${HEYSEN_COLOR};">(${(evHeysen ?? 0).toLocaleString()})</span> <span style="color:${CAPTAIN_COLOR};">(${(evCaptains ?? 0).toLocaleString()})</span> / ${EV_TARGET.toLocaleString()} <span style="font-size:10px;color:#999;">(${Math.round((evTotal ?? 0) / HIST_2022.ev * 100)}% of '22) (${Math.round((evTotal ?? 0) / HIST_2025.ev * 100)}% of '25)</span></div>
                         <div><span style="color:${PD_COLOR};font-weight:600;">PD:</span> <strong>${(pdTotal ?? 0).toLocaleString()}</strong> <span style="color:${HEYSEN_COLOR};">(${(pdHeysen ?? 0).toLocaleString()})</span> <span style="color:${CAPTAIN_COLOR};">(${(pdCaptains ?? 0).toLocaleString()})</span> / ${PD_TARGET.toLocaleString()} <span style="font-size:10px;color:#999;">(${Math.round((pdTotal ?? 0) / HIST_2022.pd * 100)}% of '22) (${Math.round((pdTotal ?? 0) / HIST_2025.pd * 100)}% of '25)</span></div>
+                        <div style="font-size:10px;color:#999;margin-top:3px;">Total: <strong style="color:#555;">${grandTotal.toLocaleString()}</strong> / ${TOTAL_TARGET.toLocaleString()} (${Math.round(grandTotal / HIST_2022.total * 100)}% of '22) (${Math.round(grandTotal / HIST_2025.total * 100)}% of '25)</div>
                     </div>
                     <div class="gus-roster-legend">
                         <span><span class="gus-dot" style="background:${HEYSEN_COLOR};"></span>Heysen</span>
