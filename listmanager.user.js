@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         List Manager Tweaks
 // @namespace    https://github.com/choujar/campaign-userscripts
-// @version      1.43.3
+// @version      1.43.4
 // @description  UX improvements for List Manager and Rocket
 // @author       Sahil Choujar
 // @match        https://listmanager.greens.org.au/*
@@ -747,6 +747,7 @@ The election has now been called! We need people to hand out 'How to Vote' cards
             .gus-bc-booth-row.gus-bc-unstaffed td { color: #aab; }
             .gus-bc-booth-row.gus-bc-unstaffed:hover { background: #f5f6fa; }
             .gus-bc-unstaffed-tag { background: #e3e8f0; color: #7889a0; font-size: 9px; font-weight: 600; padding: 1px 4px; border-radius: 3px; margin-right: 3px; }
+            .gus-bc-shared-tag { font-size: 9px; margin-right: 2px; opacity: 0.6; }
             .gus-bc-priority { color: #f57c00; font-size: 10px; letter-spacing: -1px; margin-right: 4px; }
             .gus-bc-pp-tag { background: #e8eaf6; color: #3949ab; font-size: 9px; font-weight: 700; padding: 1px 4px; border-radius: 3px; margin-right: 3px; }
             .gus-bc-tooltip {
@@ -2275,11 +2276,12 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                     const ppTag = booth.isPrepoll ? `<span class="gus-bc-pp-tag">PP</span> ` : '';
                     const ppDays = booth.isPrepoll ? ` <span style="color:#aaa;font-size:9px;">${PREPOLL_DATE_LABELS[booth.prepollDay] || 'Day ' + booth.prepollDay}</span>` : '';
                     const unstaffedTag = isUnstaffed ? '<span class="gus-bc-unstaffed-tag">\u0394</span>' : '';
+                    const sharedTag = booth.isShared ? '<span class="gus-bc-shared-tag" title="Shared booth">\u{1F517}</span>' : '';
                     const starLabel = booth.isPrepoll ? '' : (isUnstaffed ? '' : `<span class="gus-bc-priority">${PRIORITY_STARS[booth.priority] || '\u2605'}</span>`);
                     const displayName = booth.name.replace(/ Early Voting Centre$/i, '');
                     const tipParts = [booth.premises, booth.address].filter(Boolean);
                     const nameTip = tipParts.length ? ` title="${escapeHtml(tipParts.join('\n'))}"` : '';
-                    let cells = `<td${nameTip}>${starLabel}${unstaffedTag}${ppTag}${escapeHtml(displayName)}${ppDays}</td>`;
+                    let cells = `<td${nameTip}>${starLabel}${unstaffedTag}${sharedTag}${ppTag}${escapeHtml(displayName)}${ppDays}</td>`;
                     const needLabel = isUnstaffed ? '\u2014'
                         : booth.isPrepoll
                             ? `<span title="${PREPOLL_DATE_LABELS[booth.prepollDay] || 'Prepoll Day ' + booth.prepollDay}">${booth.peopleRequired}</span>`
