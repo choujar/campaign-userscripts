@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         List Manager Tweaks
 // @namespace    https://github.com/choujar/campaign-userscripts
-// @version      1.42.3
+// @version      1.42.4
 // @description  UX improvements for List Manager and Rocket
 // @author       Sahil Choujar
 // @match        https://listmanager.greens.org.au/*
@@ -2267,7 +2267,8 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                     const ppDays = booth.isPrepoll ? ` <span style="color:#aaa;font-size:9px;">${PREPOLL_DATE_LABELS[booth.prepollDay] || 'Day ' + booth.prepollDay}</span>` : '';
                     const unstaffedTag = isUnstaffed ? '<span class="gus-bc-unstaffed-tag">\u0394</span>' : '';
                     const starLabel = booth.isPrepoll ? '' : (isUnstaffed ? '' : `<span class="gus-bc-priority">${PRIORITY_STARS[booth.priority] || '\u2605'}</span>`);
-                    let cells = `<td>${starLabel}${unstaffedTag}${ppTag}${escapeHtml(booth.name)}${ppDays}</td>`;
+                    const displayName = booth.name.replace(/ Early Voting Centre$/i, '');
+                    let cells = `<td>${starLabel}${unstaffedTag}${ppTag}${escapeHtml(displayName)}${ppDays}</td>`;
                     const needLabel = isUnstaffed ? '\u2014'
                         : booth.isPrepoll
                             ? `<span title="${PREPOLL_DATE_LABELS[booth.prepollDay] || 'Prepoll Day ' + booth.prepollDay}">${booth.peopleRequired}</span>`
