@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         List Manager Tweaks
 // @namespace    https://github.com/choujar/campaign-userscripts
-// @version      1.43.6
+// @version      1.43.7
 // @description  UX improvements for List Manager and Rocket
 // @author       Sahil Choujar
 // @match        https://listmanager.greens.org.au/*
@@ -1540,6 +1540,7 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                             </div>
                         </div>
                     </div>
+                    ${(pdTotal !== null) ? histComparisonLine() : ''}
                     <div class="gus-breakdown-status">Loading 0 / ${ALL_ELECTORATES.length}...</div>
                     <div class="gus-breakdown-list"></div>
                     <div style="font-size:11px;color:#999;margin-top:12px;line-height:1.4;">
@@ -1658,12 +1659,11 @@ The election has now been called! We need people to hand out 'How to Vote' cards
             function histComparisonLine() {
                 const gt = _grandTotal ?? ((pdTotal ?? 0) + (evTotal ?? 0));
                 const ev = evTotal ?? 0, pd = pdTotal ?? 0;
-                return `<div style="font-size:10px;color:#aaa;margin-top:4px;">vs '22: EV ${Math.round(ev / HIST_2022.ev * 100)}% &middot; PD ${Math.round(pd / HIST_2022.pd * 100)}% &middot; Total ${Math.round(gt / HIST_2022.total * 100)}% &nbsp;&nbsp; vs '25: EV ${Math.round(ev / HIST_2025.ev * 100)}% &middot; PD ${Math.round(pd / HIST_2025.pd * 100)}% &middot; Total ${Math.round(gt / HIST_2025.total * 100)}%</div>`;
+                return `<div style="font-size:10px;color:#aaa;margin:8px 0 4px;text-align:center;">vs '22: EV ${Math.round(ev / HIST_2022.ev * 100)}% &middot; PD ${Math.round(pd / HIST_2022.pd * 100)}% &middot; Total ${Math.round(gt / HIST_2022.total * 100)}% &nbsp;&nbsp; vs '25: EV ${Math.round(ev / HIST_2025.ev * 100)}% &middot; PD ${Math.round(pd / HIST_2025.pd * 100)}% &middot; Total ${Math.round(gt / HIST_2025.total * 100)}%</div>`;
             }
 
             function showStatus(text, showRefresh, hint) {
-                statusEl.innerHTML = ((pdTotal !== null) ? histComparisonLine() : '') +
-                    escapeHtml(text) +
+                statusEl.innerHTML = escapeHtml(text) +
                     (showRefresh ? ' <button class="gus-breakdown-refresh">Refresh</button> <button class="gus-breakdown-download">Download JSON</button>' : '') +
                     (hint ? `<div style="font-size:11px;color:#999;margin-top:4px;">${escapeHtml(hint)}</div>` : '');
                 if (showRefresh) {
