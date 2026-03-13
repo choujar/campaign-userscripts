@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         List Manager Tweaks
 // @namespace    https://github.com/choujar/campaign-userscripts
-// @version      1.47.4
+// @version      1.48.0
 // @description  UX improvements for List Manager and Rocket
 // @author       Sahil Choujar
 // @match        https://listmanager.greens.org.au/*
@@ -2218,24 +2218,27 @@ The election has now been called! We need people to hand out 'How to Vote' cards
             const q = query.toLowerCase();
             const t = text.toLowerCase();
             if (t.includes(q)) return { match: true, score: 100 };
-            if (q.length <= 2) return { match: false, score: 0 };
-            let qi = 0, lastIdx = -1, gaps = 0, consecutive = 0, maxConsec = 0;
-            for (let ti = 0; ti < t.length && qi < q.length; ti++) {
-                if (t[ti] === q[qi]) {
-                    if (lastIdx >= 0 && ti > lastIdx + 1) gaps += ti - lastIdx - 1;
-                    consecutive++;
-                    if (consecutive > maxConsec) maxConsec = consecutive;
-                    lastIdx = ti;
-                    qi++;
-                } else { consecutive = 0; }
+            const qWords = q.split(/\s+/).filter(Boolean);
+            if (qWords.length > 1) {
+                const allMatch = qWords.every(w => bcFuzzyMatch(w, text).match);
+                if (allMatch) return { match: true, score: 90 };
+                return { match: false, score: 0 };
             }
-            if (qi === q.length) return { match: true, score: 50 + maxConsec * 10 - gaps };
-            let edits = 0;
-            const maxEdits = q.length <= 4 ? 1 : 2;
-            const words = t.split(/\s+/);
-            for (const w of words) {
+            if (q.length <= 2) return { match: false, score: 0 };
+            const tWords = t.split(/[\s~,]+/).filter(Boolean);
+            for (const w of tWords) {
+                if (w.includes(q)) return { match: true, score: 95 };
+                if (w.startsWith(q.slice(0, 3)) || q.startsWith(w.slice(0, 3))) {
+                    let qi2 = 0, consec = 0, maxC = 0;
+                    for (let i = 0; i < w.length && qi2 < q.length; i++) {
+                        if (w[i] === q[qi2]) { qi2++; consec++; if (consec > maxC) maxC = consec; }
+                        else { consec = 0; }
+                    }
+                    if (qi2 === q.length && maxC >= Math.ceil(q.length * 0.6)) return { match: true, score: 50 + maxC * 10 };
+                }
+                const maxEdits = q.length <= 4 ? 1 : 2;
                 if (Math.abs(w.length - q.length) <= maxEdits) {
-                    edits = 0;
+                    let edits = 0;
                     for (let i = 0; i < Math.max(w.length, q.length); i++) {
                         if (w[i] !== q[i]) edits++;
                     }
@@ -2281,13 +2284,46 @@ The election has now been called! We need people to hand out 'How to Vote' cards
 
         function bcHighlight(text, query) {
             if (!query) return escapeHtml(text);
-            const escaped = escapeHtml(text);
             const q = query.toLowerCase();
-            const idx = text.toLowerCase().indexOf(q);
+            const tl = text.toLowerCase();
+            const idx = tl.indexOf(q);
             if (idx >= 0) {
                 return escapeHtml(text.slice(0, idx)) + '<span class="gus-bc-highlight">' + escapeHtml(text.slice(idx, idx + q.length)) + '</span>' + escapeHtml(text.slice(idx + q.length));
             }
-            return escaped;
+            const qWords = q.split(/\s+/).filter(Boolean);
+            if (qWords.length > 1) {
+                let result = text;
+                const marks = new Array(text.length).fill(false);
+                for (const qw of qWords) {
+                    const wi = result.toLowerCase().indexOf(qw);
+                    if (wi >= 0) { for (let i = wi; i < wi + qw.length; i++) marks[i] = true; continue; }
+                    for (let i = 0; i < result.length; i++) {
+                        if (result.toLowerCase().slice(i, i + 1) === qw[0]) {
+                            const word = result.slice(i).split(/[\s.]/)[0];
+                            if (word.length > 0 && qw.startsWith(word.toLowerCase())) {
+                                for (let j = i; j < i + word.length; j++) marks[j] = true;
+                                break;
+                            }
+                        }
+                    }
+                }
+                if (marks.some(Boolean)) {
+                    let out = '', inMark = false;
+                    for (let i = 0; i <= text.length; i++) {
+                        if (i < text.length && marks[i] && !inMark) { out += '<span class="gus-bc-highlight">'; inMark = true; }
+                        if ((!marks[i] || i === text.length) && inMark) { out += '</span>'; inMark = false; }
+                        if (i < text.length) out += escapeHtml(text[i]);
+                    }
+                    return out;
+                }
+            }
+            for (const qw of qWords) {
+                const wi = tl.indexOf(qw);
+                if (wi >= 0) {
+                    return escapeHtml(text.slice(0, wi)) + '<span class="gus-bc-highlight">' + escapeHtml(text.slice(wi, wi + qw.length)) + '</span>' + escapeHtml(text.slice(wi + qw.length));
+                }
+            }
+            return escapeHtml(text);
         }
 
         let bcSortCol = 'pct';
