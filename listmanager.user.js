@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         List Manager Tweaks
 // @namespace    https://github.com/choujar/campaign-userscripts
-// @version      1.47.0
+// @version      1.47.1
 // @description  UX improvements for List Manager and Rocket
 // @author       Sahil Choujar
 // @match        https://listmanager.greens.org.au/*
@@ -2186,7 +2186,7 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                 const partialLabel = v.isPartial ? ' \u00bd' : '';
                 const rawName = bcSearchQuery ? bcHighlight(v.name, bcSearchQuery) : escapeHtml(v.name);
                 const nameHtml = v.contactId
-                    ? `<a href="https://contact-sa.greens.org.au/agc/#/contacts/${v.contactId}" target="_blank" style="color:#fff;text-decoration:underline;text-decoration-style:dotted;">${rawName}</a>`
+                    ? `<a href="https://contact-sa.greens.org.au/agc/ems8#!/contact/${v.contactId}" target="_blank" style="color:#fff;text-decoration:underline;text-decoration-style:dotted;">${rawName}</a>`
                     : rawName;
                 return `${nameHtml} <span class="${timeClass}" style="${timeStyle}">${minsToTime(v.timeStart)}\u2013${minsToTime(v.timeEnd)}${partialLabel}</span>`;
             }).join('<br>');
@@ -2367,7 +2367,7 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                             const short = bcShortName(v.name);
                             const partialCls = v.isPartial ? ' gus-bc-vol-partial' : '';
                             const nameStr = v.contactId
-                                ? `<a href="https://contact-sa.greens.org.au/agc/#/contacts/${v.contactId}" target="_blank" class="${partialCls}">${escapeHtml(short)}</a>`
+                                ? `<a href="https://contact-sa.greens.org.au/agc/ems8#!/contact/${v.contactId}" target="_blank" class="${partialCls}">${escapeHtml(short)}</a>`
                                 : `<span class="${partialCls}">${escapeHtml(short)}</span>`;
                             return nameStr + (v.isPartial ? '<span class="gus-bc-partial-marker">½</span>' : '');
                         }).join('<br>') + '</div>';
