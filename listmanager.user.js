@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         List Manager Tweaks
 // @namespace    https://github.com/choujar/campaign-userscripts
-// @version      1.46.0
+// @version      1.47.0
 // @description  UX improvements for List Manager and Rocket
 // @author       Sahil Choujar
 // @match        https://listmanager.greens.org.au/*
@@ -773,6 +773,11 @@ The election has now been called! We need people to hand out 'How to Vote' cards
             .gus-bc-search-count { font-size: 10px; color: #999; white-space: nowrap; text-align: right; min-height: 14px; }
             .gus-bc-highlight { background: #fff59d; border-radius: 2px; padding: 0 1px; }
             .gus-bc-partial-marker { font-size: 9px; color: #e65100; vertical-align: super; margin-left: 1px; }
+            .gus-bc-vol-names { font-size: 9px; font-weight: 400; line-height: 1.3; color: #555; margin-top: 1px; }
+            .gus-bc-vol-names a { color: #555; text-decoration: none; }
+            .gus-bc-vol-names a:hover { text-decoration: underline; }
+            .gus-bc-vol-partial { color: #e65100; }
+            .gus-bc-names-mode .gus-bc-slot { min-width: 80px; text-align: left; padding: 3px 5px; }
             .gus-bc-tooltip-partial { color: #ffab40; }
             .gus-bc-tooltip {
                 position: fixed;
@@ -2199,6 +2204,13 @@ The election has now been called! We need people to hand out 'How to Vote' cards
         }
 
         let bcSearchQuery = '';
+        let bcShowNames = false;
+
+        function bcShortName(fullName) {
+            const parts = fullName.trim().split(/\s+/);
+            if (parts.length <= 1) return fullName;
+            return parts[0] + ' ' + parts[parts.length - 1][0] + '.';
+        }
 
         function bcFuzzyMatch(query, text) {
             if (!query) return { match: true, score: 0 };
@@ -2349,7 +2361,18 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                     const cls = bcSlotClass(sc.have, sc.need);
                     const partial = sc.hasPartial && sc.have > 0 ? '<span class="gus-bc-partial-marker" title="Partial shift — not all volunteers cover the full slot">½</span>' : '';
                     const label = sc.need === 0 ? (sc.have > 0 ? `${sc.have}!` : '\u00b7') : `${sc.have}/${sc.need}`;
-                    cells += `<td><span class="gus-bc-slot ${cls}" data-si="${si}" data-bid="${booth.id}">${label}${partial}</span></td>`;
+                    let namesHtml = '';
+                    if (bcShowNames && sc.volunteers.length > 0) {
+                        namesHtml = '<div class="gus-bc-vol-names">' + sc.volunteers.map(v => {
+                            const short = bcShortName(v.name);
+                            const partialCls = v.isPartial ? ' gus-bc-vol-partial' : '';
+                            const nameStr = v.contactId
+                                ? `<a href="https://contact-sa.greens.org.au/agc/#/contacts/${v.contactId}" target="_blank" class="${partialCls}">${escapeHtml(short)}</a>`
+                                : `<span class="${partialCls}">${escapeHtml(short)}</span>`;
+                            return nameStr + (v.isPartial ? '<span class="gus-bc-partial-marker">½</span>' : '');
+                        }).join('<br>') + '</div>';
+                    }
+                    cells += `<td><span class="gus-bc-slot ${cls}" data-si="${si}" data-bid="${booth.id}">${label}${bcShowNames ? '' : partial}</span>${namesHtml}</td>`;
                 }
                 let boothPctLabel;
                 if (isUnstaffed) {
@@ -2561,6 +2584,7 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                         <span class="gus-bc-dl-all gus-bc-btn" title="Download overview image" style="cursor:pointer;font-size:11px;display:none;">&#x1F4F7; PNG</span>
                         <span class="gus-bc-dl-json gus-bc-btn" title="Download raw data as JSON" style="cursor:pointer;font-size:11px;display:none;">&#x1F4BE; JSON</span>
                         <span class="gus-bc-expand-all-btn gus-bc-btn" title="Expand/Collapse all electorates" style="cursor:pointer;font-size:11px;">&#x25B6; Expand All</span>
+                        <span class="gus-bc-names-toggle gus-bc-btn" title="Show/hide volunteer names in cells" style="cursor:pointer;font-size:11px;">&#x1F464; Names</span>
                     </span>
                     <span class="gus-bc-close" title="Close">&times;</span>
                 </div>
@@ -2604,6 +2628,35 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                         }
                     });
                     expandAllBtn.innerHTML = '\u25BC Collapse All';
+                }
+            });
+            const namesToggle = popup.querySelector('.gus-bc-names-toggle');
+            namesToggle.addEventListener('click', () => {
+                bcShowNames = !bcShowNames;
+                namesToggle.style.background = bcShowNames ? '#333' : '';
+                namesToggle.style.color = bcShowNames ? '#fff' : '';
+                const tableEl2 = popup.querySelector('.gus-bc-table');
+                if (tableEl2) tableEl2.classList.toggle('gus-bc-names-mode', bcShowNames);
+                if (!bcCurrentResults) return;
+                if (bcShowNames && bcExpandedEids.size === 0) {
+                    const sorted = bcSortResults(bcFilterResults(bcCurrentResults, bcFilterMode));
+                    tableEl2.querySelectorAll('.gus-bc-row').forEach(row => {
+                        if (!row.classList.contains('gus-bc-row-expanded')) {
+                            expandElectorateRow(row, sorted);
+                        }
+                    });
+                    expandAllBtn.innerHTML = '\u25BC Collapse All';
+                } else {
+                    // Re-render expanded rows with/without names
+                    tableEl2.querySelectorAll('.gus-bc-booth-row').forEach(el => el.remove());
+                    tableEl2.querySelectorAll('.gus-bc-row-expanded').forEach(el => el.classList.remove('gus-bc-row-expanded'));
+                    const eids = [...bcExpandedEids];
+                    bcExpandedEids.clear();
+                    const sorted = bcSortResults(bcFilterResults(bcCurrentResults, bcFilterMode));
+                    for (const eid of eids) {
+                        const row = tableEl2.querySelector(`.gus-bc-row[data-eid="${eid}"]`);
+                        if (row) expandElectorateRow(row, sorted);
+                    }
                 }
             });
             overlay.appendChild(popup);
