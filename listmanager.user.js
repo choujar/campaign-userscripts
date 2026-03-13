@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         List Manager Tweaks
 // @namespace    https://github.com/choujar/campaign-userscripts
-// @version      1.47.1
+// @version      1.47.2
 // @description  UX improvements for List Manager and Rocket
 // @author       Sahil Choujar
 // @match        https://listmanager.greens.org.au/*
@@ -2366,9 +2366,10 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                         namesHtml = '<div class="gus-bc-vol-names">' + sc.volunteers.map(v => {
                             const short = bcShortName(v.name);
                             const partialCls = v.isPartial ? ' gus-bc-vol-partial' : '';
+                            const shortHtml = bcSearchQuery ? bcHighlight(short, bcSearchQuery) : escapeHtml(short);
                             const nameStr = v.contactId
-                                ? `<a href="https://contact-sa.greens.org.au/agc/ems8#!/contact/${v.contactId}" target="_blank" class="${partialCls}">${escapeHtml(short)}</a>`
-                                : `<span class="${partialCls}">${escapeHtml(short)}</span>`;
+                                ? `<a href="https://contact-sa.greens.org.au/agc/ems8#!/contact/${v.contactId}" target="_blank" class="${partialCls}">${shortHtml}</a>`
+                                : `<span class="${partialCls}">${shortHtml}</span>`;
                             return nameStr + (v.isPartial ? '<span class="gus-bc-partial-marker">½</span>' : '');
                         }).join('<br>') + '</div>';
                     }
