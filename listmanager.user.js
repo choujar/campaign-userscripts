@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         List Manager Tweaks
 // @namespace    https://github.com/choujar/campaign-userscripts
-// @version      1.45.1
+// @version      1.45.2
 // @description  UX improvements for List Manager and Rocket
 // @author       Sahil Choujar
 // @match        https://listmanager.greens.org.au/*
@@ -2214,13 +2214,14 @@ The election has now been called! We need people to hand out 'How to Vote' cards
         }
 
         function bcSearchResults(results, query) {
-            if (!query) return { filtered: results, matchedBooths: new Set(), matchedVolunteers: new Set() };
+            if (!query) return { filtered: results, matchedBooths: new Set(), matchedVolunteers: new Set(), matchedElectorates: new Set(), matchType: null };
             const matchedBooths = new Set();
             const matchedVolunteers = new Set();
+            const matchedElectorates = new Set();
             const filtered = [];
             for (const r of results) {
                 const electMatch = bcFuzzyMatch(query, r.name);
-                if (electMatch.match) { filtered.push(r); continue; }
+                if (electMatch.match) { matchedElectorates.add(r.name); filtered.push(r); continue; }
                 const matchingBooths = r.booths.filter(b => {
                     if (bcFuzzyMatch(query, b.name).match) { matchedBooths.add(b.id); return true; }
                     if (b.premises && bcFuzzyMatch(query, b.premises).match) { matchedBooths.add(b.id); return true; }
@@ -2238,7 +2239,7 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                 });
                 if (matchingBooths.length > 0) filtered.push(r);
             }
-            return { filtered, matchedBooths, matchedVolunteers };
+            return { filtered, matchedBooths, matchedVolunteers, matchedElectorates };
         }
 
         function bcHighlight(text, query) {
@@ -2355,15 +2356,33 @@ The election has now been called! We need people to hand out 'How to Vote' cards
 
         function renderCoverageTable(results, tableEl, statusEl) {
             const modeFiltered = bcFilterResults(results, bcFilterMode);
-            const { filtered: searchFiltered, matchedBooths: bcMatchedBooths, matchedVolunteers: bcMatchedVols } = bcSearchResults(modeFiltered, bcSearchQuery);
+            const { filtered: searchFiltered, matchedBooths: bcMatchedBooths, matchedVolunteers: bcMatchedVols, matchedElectorates: bcMatchedElects } = bcSearchResults(modeFiltered, bcSearchQuery);
             const filtered = searchFiltered;
             const sorted = bcSortResults(filtered);
 
             const searchCountEl = document.querySelector('.gus-bc-search-count');
             if (searchCountEl) {
                 if (bcSearchQuery) {
-                    const totalBooths = filtered.reduce((s, r) => s + r.booths.length, 0);
-                    searchCountEl.textContent = `${filtered.length} electorates, ${bcMatchedBooths.size} booths`;
+                    const parts = [];
+                    if (bcMatchedVols.size > 0) {
+                        const names = [...bcMatchedVols].slice(0, 3);
+                        const volLabel = names.join(', ') + (bcMatchedVols.size > 3 ? ` +${bcMatchedVols.size - 3}` : '');
+                        parts.push(volLabel);
+                    }
+                    if (bcMatchedElects.size > 0) parts.push(`${bcMatchedElects.size} electorate${bcMatchedElects.size > 1 ? 's' : ''}`);
+                    if (bcMatchedBooths.size > 0) parts.push(`${bcMatchedBooths.size} booth${bcMatchedBooths.size > 1 ? 's' : ''}`);
+                    if (bcMatchedVols.size > 0 && (bcMatchedElects.size > 0 || bcMatchedBooths.size > 0)) {
+                        const where = [];
+                        if (bcMatchedElects.size > 0) where.push(`${bcMatchedElects.size} electorate${bcMatchedElects.size > 1 ? 's' : ''}`);
+                        if (bcMatchedBooths.size > 0) where.push(`${bcMatchedBooths.size} booth${bcMatchedBooths.size > 1 ? 's' : ''}`);
+                        const names = [...bcMatchedVols].slice(0, 3);
+                        const volLabel = names.join(', ') + (bcMatchedVols.size > 3 ? ` +${bcMatchedVols.size - 3}` : '');
+                        searchCountEl.textContent = `${volLabel} in ${where.join(', ')}`;
+                    } else if (parts.length > 0) {
+                        searchCountEl.textContent = parts.join(', ');
+                    } else {
+                        searchCountEl.textContent = `${filtered.length} result${filtered.length !== 1 ? 's' : ''}`;
+                    }
                 } else {
                     searchCountEl.textContent = '';
                 }
