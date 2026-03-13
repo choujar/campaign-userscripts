@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         List Manager Tweaks
 // @namespace    https://github.com/choujar/campaign-userscripts
-// @version      1.47.2
+// @version      1.47.3
 // @description  UX improvements for List Manager and Rocket
 // @author       Sahil Choujar
 // @match        https://listmanager.greens.org.au/*
@@ -771,7 +771,8 @@ The election has now been called! We need people to hand out 'How to Vote' cards
             .gus-bc-search:focus { border-color: #999; }
             .gus-bc-search::placeholder { color: #bbb; }
             .gus-bc-search-count { font-size: 10px; color: #999; white-space: nowrap; text-align: right; min-height: 14px; }
-            .gus-bc-highlight { background: #fff59d; border-radius: 2px; padding: 0 1px; }
+            .gus-bc-highlight { background: #ffe0b2; border-radius: 2px; padding: 0 1px; }
+            .gus-bc-tooltip .gus-bc-highlight { background: #e65100; color: #fff; }
             .gus-bc-partial-marker { font-size: 9px; color: #e65100; vertical-align: super; margin-left: 1px; }
             .gus-bc-vol-names { font-size: 9px; font-weight: 400; line-height: 1.3; color: #555; margin-top: 1px; }
             .gus-bc-vol-names a { color: #555; text-decoration: none; }
@@ -2693,6 +2694,13 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                     bcSearchQuery = searchInput.value.trim();
                     if (bcCurrentResults) {
                         if (bcSearchQuery) {
+                            if (!bcShowNames) {
+                                bcShowNames = true;
+                                namesToggle.style.background = '#333';
+                                namesToggle.style.color = '#fff';
+                                const tableEl2 = popup.querySelector('.gus-bc-table');
+                                if (tableEl2) tableEl2.classList.add('gus-bc-names-mode');
+                            }
                             bcExpandedEids.clear();
                             const { matchedBooths } = bcSearchResults(bcCurrentResults, bcSearchQuery);
                             if (matchedBooths.size > 0) {
