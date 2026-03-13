@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         List Manager Tweaks
 // @namespace    https://github.com/choujar/campaign-userscripts
-// @version      1.45.4
+// @version      1.45.5
 // @description  UX improvements for List Manager and Rocket
 // @author       Sahil Choujar
 // @match        https://listmanager.greens.org.au/*
@@ -2227,8 +2227,11 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                 if (electMatch.match) { matchedElectorates.add(r.name); filtered.push(r); continue; }
                 const matchingBooths = r.booths.filter(b => {
                     if (bcFuzzyMatch(query, b.name).match) { matchedBooths.add(b.id); return true; }
-                    if (b.premises && bcFuzzyMatch(query, b.premises).match) { matchedBooths.add(b.id); return true; }
-                    if (b.address && bcFuzzyMatch(query, b.address).match) { matchedBooths.add(b.id); return true; }
+                    if (b.peopleRequired > 0) {
+                        const q = query.toLowerCase();
+                        if (b.premises && b.premises.toLowerCase().includes(q)) { matchedBooths.add(b.id); return true; }
+                        if (b.address && b.address.toLowerCase().includes(q)) { matchedBooths.add(b.id); return true; }
+                    }
                     for (const sc of b.slotCoverage) {
                         for (const v of sc.volunteers) {
                             if (bcFuzzyMatch(query, v.name).match) {
