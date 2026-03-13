@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         List Manager Tweaks
 // @namespace    https://github.com/choujar/campaign-userscripts
-// @version      1.45.0
+// @version      1.45.1
 // @description  UX improvements for List Manager and Rocket
 // @author       Sahil Choujar
 // @match        https://listmanager.greens.org.au/*
@@ -756,8 +756,8 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                 justify-content: flex-end;
             }
             .gus-bc-search {
-                width: 220px;
-                padding: 4px 10px;
+                width: 290px;
+                padding: 6px 10px;
                 border: 1px solid #ddd;
                 border-radius: 4px;
                 font-size: 12px;
@@ -1836,6 +1836,10 @@ The election has now been called! We need people to hand out 'How to Vote' cards
 
         function parseBooths(commands) {
             if (!commands || !commands.booths) return [];
+            // Debug: log first booth's raw slot keys to discover captain/coordinator fields
+            const _dbg = commands.booths.find(b => b.slots && b.slots.length > 0);
+            if (_dbg) console.log('[GUS] Sample slot keys:', Object.keys(_dbg.slots[0]), 'Sample slot:', JSON.stringify(_dbg.slots[0]));
+            if (_dbg) console.log('[GUS] Sample booth keys:', Object.keys(_dbg), 'captains?', _dbg.captains, 'coordinator?', _dbg.coordinator);
             const allBooths = commands.booths.filter(b => b.info && b.info.defunct !== '1');
 
             const edBooths = allBooths.filter(b => b.info.prepoll === '0').map(b => {
@@ -2514,6 +2518,7 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                     <span style="display:flex;align-items:center;gap:8px;">
                         <span class="gus-bc-title">Booth Coverage</span>
                         <span class="gus-bc-dl-all gus-bc-btn" title="Download overview image" style="cursor:pointer;font-size:11px;display:none;">&#x1F4F7; PNG</span>
+                        <span class="gus-bc-dl-json gus-bc-btn" title="Download raw data as JSON" style="cursor:pointer;font-size:11px;display:none;">&#x1F4BE; JSON</span>
                         <span class="gus-bc-expand-all-btn gus-bc-btn" title="Expand/Collapse all electorates" style="cursor:pointer;font-size:11px;">&#x25B6; Expand All</span>
                     </span>
                     <span class="gus-bc-close" title="Close">&times;</span>
@@ -2539,6 +2544,7 @@ The election has now been called! We need people to hand out 'How to Vote' cards
 
             popup.querySelector('.gus-bc-close').addEventListener('click', () => { hideBcTooltip(); bcSearchQuery = ''; overlay.remove(); });
             const dlAllBtn = popup.querySelector('.gus-bc-dl-all');
+            const dlJsonBtn = popup.querySelector('.gus-bc-dl-json');
             const expandAllBtn = popup.querySelector('.gus-bc-expand-all-btn');
             expandAllBtn.addEventListener('click', () => {
                 const tableEl2 = popup.querySelector('.gus-bc-table');
@@ -2612,9 +2618,41 @@ The election has now been called! We need people to hand out 'How to Vote' cards
             const BC_CACHE_TTL = 30 * 60 * 1000;
             let dlAllData = null;
             dlAllBtn.addEventListener('click', (e) => { e.stopPropagation(); if (dlAllData) bcExportOverview(dlAllData); });
+            dlJsonBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                if (!dlAllData) return;
+                const exportData = {};
+                for (const r of dlAllData) {
+                    exportData[r.name] = {
+                        id: r.id,
+                        booths: r.booths.map(b => ({
+                            id: b.id, name: b.name, premises: b.premises, address: b.address,
+                            priority: b.priority, peopleRequired: b.peopleRequired,
+                            estTotal: b.estTotal, estGreen: b.estGreen,
+                            isShared: b.isShared, isPrepoll: b.isPrepoll,
+                            prepollDay: b.prepollDay || null,
+                            slotCoverage: b.slotCoverage.map((sc, si) => ({
+                                slot: BOOTH_TIME_SLOTS[si].label,
+                                have: sc.have, need: sc.need, hasPartial: sc.hasPartial,
+                                volunteers: sc.volunteers.map(v => ({ name: v.name, start: minsToTime(v.timeStart), end: minsToTime(v.timeEnd), isPartial: v.isPartial }))
+                            }))
+                        })),
+                        summary: r.summary
+                    };
+                }
+                const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+                const a = document.createElement('a');
+                a.href = URL.createObjectURL(blob);
+                a.download = 'booth-coverage-' + new Date().toISOString().slice(0, 10) + '.json';
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                URL.revokeObjectURL(a.href);
+            });
             function enableDlAll(data) {
                 dlAllData = data;
                 dlAllBtn.style.display = 'inline-block';
+                dlJsonBtn.style.display = 'inline-block';
             }
 
             function addRefreshBtn(data) {
