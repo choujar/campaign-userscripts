@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         List Manager Tweaks
 // @namespace    https://github.com/choujar/campaign-userscripts
-// @version      1.45.2
+// @version      1.45.3
 // @description  UX improvements for List Manager and Rocket
 // @author       Sahil Choujar
 // @match        https://listmanager.greens.org.au/*
@@ -753,7 +753,9 @@ The election has now been called! We need people to hand out 'How to Vote' cards
             .gus-bc-search-wrap {
                 flex: 1;
                 display: flex;
-                justify-content: flex-end;
+                flex-direction: column;
+                align-items: flex-end;
+                gap: 2px;
             }
             .gus-bc-search {
                 width: 290px;
@@ -767,7 +769,7 @@ The election has now been called! We need people to hand out 'How to Vote' cards
             }
             .gus-bc-search:focus { border-color: #999; }
             .gus-bc-search::placeholder { color: #bbb; }
-            .gus-bc-search-count { font-size: 10px; color: #999; margin-right: 6px; white-space: nowrap; align-self: center; }
+            .gus-bc-search-count { font-size: 10px; color: #999; white-space: nowrap; text-align: right; min-height: 14px; }
             .gus-bc-highlight { background: #fff59d; border-radius: 2px; padding: 0 1px; }
             .gus-bc-partial-marker { font-size: 9px; color: #e65100; vertical-align: super; margin-left: 1px; }
             .gus-bc-tooltip-partial { color: #ffab40; }
@@ -2551,8 +2553,8 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                         ${[7,5,4,3,2,1].map(d => `<option value="${d}"${bcFilterPPDay === d ? ' selected' : ''}>${PREPOLL_DATE_LABELS[d]}</option>`).join('')}
                     </select>
                     <span class="gus-bc-search-wrap">
-                        <span class="gus-bc-search-count"></span>
                         <input type="text" class="gus-bc-search" placeholder="Search electorates, booths, volunteers\u2026" spellcheck="false">
+                        <span class="gus-bc-search-count"></span>
                     </span>
                 </div>
                 <div class="gus-bc-summary"></div>
