@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         List Manager Tweaks
 // @namespace    https://github.com/choujar/campaign-userscripts
-// @version      1.45.5
+// @version      1.46.0
 // @description  UX improvements for List Manager and Rocket
 // @author       Sahil Choujar
 // @match        https://listmanager.greens.org.au/*
@@ -1833,7 +1833,8 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                 const ts = parseInt(vol.time_start);
                 const te = parseInt(vol.time_end);
                 const isPartial = ts > slotDef.start || te < slotDef.end;
-                return { name: vol.name, timeStart: ts, timeEnd: te, isPartial };
+                const contactId = vol.contact_id || vol.id || vol.member_id || null;
+                return { name: vol.name, timeStart: ts, timeEnd: te, isPartial, contactId };
             });
         }
 
@@ -2159,18 +2160,33 @@ The election has now been called! We need people to hand out 'How to Vote' cards
         }
 
         let bcTooltipEl = null;
+        let bcTooltipHideTimer = null;
+        function scheduleBcTooltipHide() {
+            clearTimeout(bcTooltipHideTimer);
+            bcTooltipHideTimer = setTimeout(() => {
+                if (bcTooltipEl) { bcTooltipEl.remove(); bcTooltipEl = null; }
+            }, 200);
+        }
         function showBcTooltip(e, volunteers) {
+            clearTimeout(bcTooltipHideTimer);
             hideBcTooltip();
             if (!volunteers || volunteers.length === 0) return;
             const tip = document.createElement('div');
             tip.className = 'gus-bc-tooltip';
+            const hasLinks = volunteers.some(v => v.contactId);
+            if (hasLinks) tip.style.pointerEvents = 'auto';
             tip.innerHTML = volunteers.map(v => {
                 const timeClass = v.isPartial ? 'gus-bc-tooltip-partial' : '';
                 const timeStyle = v.isPartial ? '' : 'color:#aaa;';
                 const partialLabel = v.isPartial ? ' \u00bd' : '';
-                const nameHtml = bcSearchQuery ? bcHighlight(v.name, bcSearchQuery) : escapeHtml(v.name);
+                const rawName = bcSearchQuery ? bcHighlight(v.name, bcSearchQuery) : escapeHtml(v.name);
+                const nameHtml = v.contactId
+                    ? `<a href="https://contact-sa.greens.org.au/agc/#/contacts/${v.contactId}" target="_blank" style="color:#fff;text-decoration:underline;text-decoration-style:dotted;">${rawName}</a>`
+                    : rawName;
                 return `${nameHtml} <span class="${timeClass}" style="${timeStyle}">${minsToTime(v.timeStart)}\u2013${minsToTime(v.timeEnd)}${partialLabel}</span>`;
             }).join('<br>');
+            tip.addEventListener('mouseenter', () => clearTimeout(bcTooltipHideTimer));
+            tip.addEventListener('mouseleave', scheduleBcTooltipHide);
             document.body.appendChild(tip);
             bcTooltipEl = tip;
             const rect = e.target.getBoundingClientRect();
@@ -2351,7 +2367,7 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                     const b = booths.find(x => x.id === bid);
                     if (b) {
                         span.addEventListener('mouseenter', (e) => showBcTooltip(e, b.slotCoverage[si].volunteers));
-                        span.addEventListener('mouseleave', hideBcTooltip);
+                        span.addEventListener('mouseleave', scheduleBcTooltipHide);
                     }
                 });
 
