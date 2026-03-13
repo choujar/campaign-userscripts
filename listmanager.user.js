@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         List Manager Tweaks
 // @namespace    https://github.com/choujar/campaign-userscripts
-// @version      1.44.1
+// @version      1.45.0
 // @description  UX improvements for List Manager and Rocket
 // @author       Sahil Choujar
 // @match        https://listmanager.greens.org.au/*
@@ -750,6 +750,27 @@ The election has now been called! We need people to hand out 'How to Vote' cards
             .gus-bc-shared-tag { font-size: 9px; margin-right: 2px; opacity: 0.6; }
             .gus-bc-priority { color: #f57c00; font-size: 10px; letter-spacing: -1px; margin-right: 4px; }
             .gus-bc-pp-tag { background: #e8eaf6; color: #3949ab; font-size: 9px; font-weight: 700; padding: 1px 4px; border-radius: 3px; margin-right: 3px; }
+            .gus-bc-search-wrap {
+                flex: 1;
+                display: flex;
+                justify-content: flex-end;
+            }
+            .gus-bc-search {
+                width: 220px;
+                padding: 4px 10px;
+                border: 1px solid #ddd;
+                border-radius: 4px;
+                font-size: 12px;
+                color: #333;
+                outline: none;
+                transition: border-color 0.15s;
+            }
+            .gus-bc-search:focus { border-color: #999; }
+            .gus-bc-search::placeholder { color: #bbb; }
+            .gus-bc-search-count { font-size: 10px; color: #999; margin-right: 6px; white-space: nowrap; align-self: center; }
+            .gus-bc-highlight { background: #fff59d; border-radius: 2px; padding: 0 1px; }
+            .gus-bc-partial-marker { font-size: 9px; color: #e65100; vertical-align: super; margin-left: 1px; }
+            .gus-bc-tooltip-partial { color: #ffab40; }
             .gus-bc-tooltip {
                 position: fixed;
                 background: #333;
@@ -1805,11 +1826,12 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                 const vs = parseInt(vol.time_start);
                 const ve = parseInt(vol.time_end);
                 return vs < slotDef.end && ve > slotDef.start;
-            }).map(vol => ({
-                name: vol.name,
-                timeStart: parseInt(vol.time_start),
-                timeEnd: parseInt(vol.time_end)
-            }));
+            }).map(vol => {
+                const ts = parseInt(vol.time_start);
+                const te = parseInt(vol.time_end);
+                const isPartial = ts > slotDef.start || te < slotDef.end;
+                return { name: vol.name, timeStart: ts, timeEnd: te, isPartial };
+            });
         }
 
         function parseBooths(commands) {
@@ -1820,9 +1842,9 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                 const info = b.info;
                 const need = computeBoothNeed(info);
                 const slotCoverage = BOOTH_TIME_SLOTS.map(slotDef => {
-                    if (slotDef.prepollOnly) return { have: 0, need: 0, volunteers: [] };
+                    if (slotDef.prepollOnly) return { have: 0, need: 0, volunteers: [], hasPartial: false };
                     const covering = slotVolunteers(b.slots, slotDef);
-                    return { have: covering.length, need, volunteers: covering };
+                    return { have: covering.length, need, volunteers: covering, hasPartial: covering.some(v => v.isPartial) };
                 });
                 return {
                     id: info.id, name: info.name, premises: info.premises,
@@ -1839,10 +1861,10 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                 const ppDay = parseInt(info.prepoll) || 0;
                 const slotCoverage = BOOTH_TIME_SLOTS.map(slotDef => {
                     if (slotDef.prepollOnly && ppDay !== PREPOLL_LATE_VOTING_DAY) {
-                        return { have: 0, need: 0, volunteers: [] };
+                        return { have: 0, need: 0, volunteers: [], hasPartial: false };
                     }
                     const covering = slotVolunteers(b.slots, slotDef);
-                    return { have: covering.length, need, volunteers: covering };
+                    return { have: covering.length, need, volunteers: covering, hasPartial: covering.some(v => v.isPartial) };
                 });
                 return {
                     id: info.id, name: (info.name || '').replace(/ Early Voting Centre$/i, '') || info.premises,
@@ -2135,9 +2157,13 @@ The election has now been called! We need people to hand out 'How to Vote' cards
             if (!volunteers || volunteers.length === 0) return;
             const tip = document.createElement('div');
             tip.className = 'gus-bc-tooltip';
-            tip.innerHTML = volunteers.map(v =>
-                `${escapeHtml(v.name)} <span style="color:#aaa;">${minsToTime(v.timeStart)}\u2013${minsToTime(v.timeEnd)}</span>`
-            ).join('<br>');
+            tip.innerHTML = volunteers.map(v => {
+                const timeClass = v.isPartial ? 'gus-bc-tooltip-partial' : '';
+                const timeStyle = v.isPartial ? '' : 'color:#aaa;';
+                const partialLabel = v.isPartial ? ' \u00bd' : '';
+                const nameHtml = bcSearchQuery ? bcHighlight(v.name, bcSearchQuery) : escapeHtml(v.name);
+                return `${nameHtml} <span class="${timeClass}" style="${timeStyle}">${minsToTime(v.timeStart)}\u2013${minsToTime(v.timeEnd)}${partialLabel}</span>`;
+            }).join('<br>');
             document.body.appendChild(tip);
             bcTooltipEl = tip;
             const rect = e.target.getBoundingClientRect();
@@ -2147,6 +2173,79 @@ The election has now been called! We need people to hand out 'How to Vote' cards
 
         function hideBcTooltip() {
             if (bcTooltipEl) { bcTooltipEl.remove(); bcTooltipEl = null; }
+        }
+
+        let bcSearchQuery = '';
+
+        function bcFuzzyMatch(query, text) {
+            if (!query) return { match: true, score: 0 };
+            const q = query.toLowerCase();
+            const t = text.toLowerCase();
+            if (t.includes(q)) return { match: true, score: 100 };
+            if (q.length <= 2) return { match: false, score: 0 };
+            let qi = 0, lastIdx = -1, gaps = 0, consecutive = 0, maxConsec = 0;
+            for (let ti = 0; ti < t.length && qi < q.length; ti++) {
+                if (t[ti] === q[qi]) {
+                    if (lastIdx >= 0 && ti > lastIdx + 1) gaps += ti - lastIdx - 1;
+                    consecutive++;
+                    if (consecutive > maxConsec) maxConsec = consecutive;
+                    lastIdx = ti;
+                    qi++;
+                } else { consecutive = 0; }
+            }
+            if (qi === q.length) return { match: true, score: 50 + maxConsec * 10 - gaps };
+            let edits = 0;
+            const maxEdits = q.length <= 4 ? 1 : 2;
+            const words = t.split(/\s+/);
+            for (const w of words) {
+                if (Math.abs(w.length - q.length) <= maxEdits) {
+                    edits = 0;
+                    for (let i = 0; i < Math.max(w.length, q.length); i++) {
+                        if (w[i] !== q[i]) edits++;
+                    }
+                    if (edits <= maxEdits) return { match: true, score: 30 - edits * 5 };
+                }
+            }
+            return { match: false, score: 0 };
+        }
+
+        function bcSearchResults(results, query) {
+            if (!query) return { filtered: results, matchedBooths: new Set(), matchedVolunteers: new Set() };
+            const matchedBooths = new Set();
+            const matchedVolunteers = new Set();
+            const filtered = [];
+            for (const r of results) {
+                const electMatch = bcFuzzyMatch(query, r.name);
+                if (electMatch.match) { filtered.push(r); continue; }
+                const matchingBooths = r.booths.filter(b => {
+                    if (bcFuzzyMatch(query, b.name).match) { matchedBooths.add(b.id); return true; }
+                    if (b.premises && bcFuzzyMatch(query, b.premises).match) { matchedBooths.add(b.id); return true; }
+                    if (b.address && bcFuzzyMatch(query, b.address).match) { matchedBooths.add(b.id); return true; }
+                    for (const sc of b.slotCoverage) {
+                        for (const v of sc.volunteers) {
+                            if (bcFuzzyMatch(query, v.name).match) {
+                                matchedBooths.add(b.id);
+                                matchedVolunteers.add(v.name);
+                                return true;
+                            }
+                        }
+                    }
+                    return false;
+                });
+                if (matchingBooths.length > 0) filtered.push(r);
+            }
+            return { filtered, matchedBooths, matchedVolunteers };
+        }
+
+        function bcHighlight(text, query) {
+            if (!query) return escapeHtml(text);
+            const escaped = escapeHtml(text);
+            const q = query.toLowerCase();
+            const idx = text.toLowerCase().indexOf(q);
+            if (idx >= 0) {
+                return escapeHtml(text.slice(0, idx)) + '<span class="gus-bc-highlight">' + escapeHtml(text.slice(idx, idx + q.length)) + '</span>' + escapeHtml(text.slice(idx + q.length));
+            }
+            return escaped;
         }
 
         let bcSortCol = 'pct';
@@ -2211,7 +2310,8 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                 const displayName = booth.name.replace(/ Early Voting Centre$/i, '');
                 const tipParts = [booth.premises, booth.address].filter(Boolean);
                 const nameTip = tipParts.length ? ` title="${escapeHtml(tipParts.join('\n'))}"` : '';
-                let cells = `<td${nameTip}>${starLabel}${unstaffedTag}${sharedTag}${ppTag}${escapeHtml(displayName)}${ppDays}</td>`;
+                const nameHtml = bcSearchQuery ? bcHighlight(displayName, bcSearchQuery) : escapeHtml(displayName);
+                let cells = `<td${nameTip}>${starLabel}${unstaffedTag}${sharedTag}${ppTag}${nameHtml}${ppDays}</td>`;
                 const needLabel = isUnstaffed ? '\u2014'
                     : booth.isPrepoll
                         ? `<span title="${PREPOLL_DATE_LABELS[booth.prepollDay] || 'Prepoll Day ' + booth.prepollDay}">${booth.peopleRequired}</span>`
@@ -2220,8 +2320,9 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                 for (let si = 0; si < BOOTH_TIME_SLOTS.length; si++) {
                     const sc = booth.slotCoverage[si];
                     const cls = bcSlotClass(sc.have, sc.need);
+                    const partial = sc.hasPartial && sc.have > 0 ? '<span class="gus-bc-partial-marker" title="Partial shift — not all volunteers cover the full slot">½</span>' : '';
                     const label = sc.need === 0 ? (sc.have > 0 ? `${sc.have}!` : '\u00b7') : `${sc.have}/${sc.need}`;
-                    cells += `<td><span class="gus-bc-slot ${cls}" data-si="${si}" data-bid="${booth.id}">${label}</span></td>`;
+                    cells += `<td><span class="gus-bc-slot ${cls}" data-si="${si}" data-bid="${booth.id}">${label}${partial}</span></td>`;
                 }
                 let boothPctLabel;
                 if (isUnstaffed) {
@@ -2249,8 +2350,20 @@ The election has now been called! We need people to hand out 'How to Vote' cards
         }
 
         function renderCoverageTable(results, tableEl, statusEl) {
-            const filtered = bcFilterResults(results, bcFilterMode);
+            const modeFiltered = bcFilterResults(results, bcFilterMode);
+            const { filtered: searchFiltered, matchedBooths: bcMatchedBooths, matchedVolunteers: bcMatchedVols } = bcSearchResults(modeFiltered, bcSearchQuery);
+            const filtered = searchFiltered;
             const sorted = bcSortResults(filtered);
+
+            const searchCountEl = document.querySelector('.gus-bc-search-count');
+            if (searchCountEl) {
+                if (bcSearchQuery) {
+                    const totalBooths = filtered.reduce((s, r) => s + r.booths.length, 0);
+                    searchCountEl.textContent = `${filtered.length} electorates, ${bcMatchedBooths.size} booths`;
+                } else {
+                    searchCountEl.textContent = '';
+                }
+            }
 
             const grandSlots = BOOTH_TIME_SLOTS.map((_, si) => {
                 let have = 0, need = 0, capped = 0;
@@ -2286,7 +2399,8 @@ The election has now been called! We need people to hand out 'How to Vote' cards
             for (const r of sorted) {
                 const s = r.summary;
                 html += `<tr class="gus-bc-row" data-eid="${r.id}">`;
-                html += `<td><span class="gus-bc-expand-icon">\u25B6</span> ${escapeHtml(r.name)} <span class="gus-bc-dl-btn" data-eid="${r.id}" title="Download image" style="cursor:pointer;opacity:0.3;font-size:10px;">\uD83D\uDCF7</span></td>`;
+                const eName = bcSearchQuery ? bcHighlight(r.name, bcSearchQuery) : escapeHtml(r.name);
+                html += `<td><span class="gus-bc-expand-icon">\u25B6</span> ${eName} <span class="gus-bc-dl-btn" data-eid="${r.id}" title="Download image" style="cursor:pointer;opacity:0.3;font-size:10px;">\uD83D\uDCF7</span></td>`;
                 html += `<td>${s.totalBooths}</td>`;
                 for (let si = 0; si < BOOTH_TIME_SLOTS.length; si++) {
                     const ss = s.slotSummaries[si];
@@ -2391,7 +2505,7 @@ The election has now been called! We need people to hand out 'How to Vote' cards
 
             const overlay = document.createElement('div');
             overlay.className = 'gus-bc-overlay';
-            overlay.addEventListener('click', (e) => { if (e.target === overlay) { hideBcTooltip(); overlay.remove(); } });
+            overlay.addEventListener('click', (e) => { if (e.target === overlay) { hideBcTooltip(); bcSearchQuery = ''; overlay.remove(); } });
 
             const popup = document.createElement('div');
             popup.className = 'gus-bc-popup';
@@ -2412,6 +2526,10 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                         <option value="">All days</option>
                         ${[7,5,4,3,2,1].map(d => `<option value="${d}"${bcFilterPPDay === d ? ' selected' : ''}>${PREPOLL_DATE_LABELS[d]}</option>`).join('')}
                     </select>
+                    <span class="gus-bc-search-wrap">
+                        <span class="gus-bc-search-count"></span>
+                        <input type="text" class="gus-bc-search" placeholder="Search electorates, booths, volunteers\u2026" spellcheck="false">
+                    </span>
                 </div>
                 <div class="gus-bc-summary"></div>
                 <div class="gus-bc-status"><span class="gus-spinner"></span> Loading...</div>
@@ -2419,7 +2537,7 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                 <div class="gus-bc-actions" style="margin-top:12px;text-align:center;"></div>
             `;
 
-            popup.querySelector('.gus-bc-close').addEventListener('click', () => { hideBcTooltip(); overlay.remove(); });
+            popup.querySelector('.gus-bc-close').addEventListener('click', () => { hideBcTooltip(); bcSearchQuery = ''; overlay.remove(); });
             const dlAllBtn = popup.querySelector('.gus-bc-dl-all');
             const expandAllBtn = popup.querySelector('.gus-bc-expand-all-btn');
             expandAllBtn.addEventListener('click', () => {
@@ -2463,6 +2581,32 @@ The election has now been called! We need people to hand out 'How to Vote' cards
             ppDaySelect.addEventListener('change', () => {
                 bcFilterPPDay = ppDaySelect.value ? parseInt(ppDaySelect.value) : null;
                 if (bcCurrentResults) renderCoverageTable(bcCurrentResults, tableEl, summaryEl);
+            });
+
+            const searchInput = popup.querySelector('.gus-bc-search');
+            const searchCountEl = popup.querySelector('.gus-bc-search-count');
+            let searchDebounce = null;
+            searchInput.addEventListener('input', () => {
+                clearTimeout(searchDebounce);
+                searchDebounce = setTimeout(() => {
+                    bcSearchQuery = searchInput.value.trim();
+                    if (bcCurrentResults) {
+                        if (bcSearchQuery) {
+                            bcExpandedEids.clear();
+                            const { matchedBooths } = bcSearchResults(bcCurrentResults, bcSearchQuery);
+                            if (matchedBooths.size > 0) {
+                                const filtered = bcFilterResults(bcCurrentResults, bcFilterMode);
+                                const sorted = bcSortResults(filtered);
+                                const { filtered: searchFiltered } = bcSearchResults(sorted, bcSearchQuery);
+                                for (const r of searchFiltered) bcExpandedEids.add(String(r.id));
+                            }
+                        }
+                        renderCoverageTable(bcCurrentResults, tableEl, summaryEl);
+                    }
+                }, 200);
+            });
+            searchInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape') { searchInput.value = ''; bcSearchQuery = ''; if (bcCurrentResults) renderCoverageTable(bcCurrentResults, tableEl, summaryEl); }
             });
 
             const BC_CACHE_TTL = 30 * 60 * 1000;
