@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         List Manager Tweaks
 // @namespace    https://github.com/choujar/campaign-userscripts
-// @version      1.48.1
+// @version      1.48.2
 // @description  UX improvements for List Manager and Rocket
 // @author       Sahil Choujar
 // @match        https://listmanager.greens.org.au/*
@@ -1909,7 +1909,7 @@ The election has now been called! We need people to hand out 'How to Vote' cards
         }
 
         function computeElectorateSummary(booths) {
-            const totalBooths = booths.length;
+            const totalBooths = booths.filter(b => b.slotCoverage.some(sc => sc.need > 0)).length;
             const slotSummaries = BOOTH_TIME_SLOTS.map((_, si) => {
                 let totalHave = 0, totalNeed = 0, cappedHave = 0;
                 for (const b of booths) {
