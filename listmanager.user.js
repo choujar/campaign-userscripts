@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         List Manager Tweaks
 // @namespace    https://github.com/choujar/campaign-userscripts
-// @version      1.48.0
+// @version      1.48.1
 // @description  UX improvements for List Manager and Rocket
 // @author       Sahil Choujar
 // @match        https://listmanager.greens.org.au/*
@@ -1332,6 +1332,17 @@ The election has now been called! We need people to hand out 'How to Vote' cards
             });
         }
 
+        function buildAllRosteredTree() {
+            return JSON.stringify({
+                op: 'intersection',
+                nodes: [
+                    { op: 'filter', filter: { name: 'roster', value: { electionId: 182, electorateIds: [], rosterTypes: ['Rostered', 'Self-rostered'], shiftStatus: 'Any', votingPeriod: 'Any' } } }
+                ],
+                printTime: false,
+                useAdvancedSearchII: false
+            });
+        }
+
         function buildElectorateTree(electorateId) {
             return JSON.stringify({
                 op: 'intersection',
@@ -1392,7 +1403,7 @@ The election has now been called! We need people to hand out 'How to Vote' cards
 
             function checkDone() {
                 done++;
-                if (done < 6) { updateRosterWidget(); return; }
+                if (done < 7) { updateRosterWidget(); return; }
                 rosterLoading = false;
                 if (authExpired) {
                     capturedJwt = null;
@@ -1401,11 +1412,6 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                     waitForJwtAndRetry(callback);
                     return;
                 }
-                // Compute deduplicated grand total from entities
-                const pdIds = new Set((_rosterEntities.pd || []).map(e => e.id));
-                const evIds = new Set((_rosterEntities.ev || []).map(e => e.id));
-                const allIds = new Set([...pdIds, ...evIds]);
-                _grandTotal = allIds.size;
                 updateRosterWidget();
                 if (callback) callback(pdTotal, rosterError);
             }
@@ -1451,6 +1457,13 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                 if (err === 'auth_expired') { authExpired = true; }
                 else if (err) { if (!rosterError) rosterError = err; }
                 else { evCaptains = count; _rosterEntities.evCaptains = entities || []; }
+                checkDone();
+            });
+
+            fetchOneRoster(buildAllRosteredTree(), function(count, err) {
+                if (err === 'auth_expired') { authExpired = true; }
+                else if (err) { if (!rosterError) rosterError = err; }
+                else { _grandTotal = count; }
                 checkDone();
             });
         }
