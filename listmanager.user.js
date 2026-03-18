@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         List Manager Tweaks
 // @namespace    https://github.com/choujar/campaign-userscripts
-// @version      1.48.2
+// @version      1.48.3
 // @description  UX improvements for List Manager and Rocket
 // @author       Sahil Choujar
 // @match        https://listmanager.greens.org.au/*
@@ -1977,13 +1977,23 @@ The election has now been called! We need people to hand out 'How to Vote' cards
 
         function bcDrawTableToCanvas(title, headers, rows) {
             const scale = 2;
-            const colWidths = [200, 50, ...BOOTH_TIME_SLOTS.map(() => 65), 55];
+            const hasSubLines = rows.some(r => r.cells.some(c => c.subLines && c.subLines.length > 0));
+            const slotW = hasSubLines ? 85 : 65;
+            const colWidths = [200, 50, ...BOOTH_TIME_SLOTS.map(() => slotW), 55];
             const totalW = colWidths.reduce((a, b) => a + b, 0) + 20;
             const headerH = 32;
-            const rowH = 26;
+            const baseRowH = 26;
+            const subLineH = 11;
             const titleH = 40;
             const padX = 10;
-            const totalH = titleH + headerH + rows.length * rowH + 10;
+            const rowHeights = rows.map(row => {
+                let maxSub = 0;
+                for (const cell of row.cells) {
+                    if (cell.subLines && cell.subLines.length > maxSub) maxSub = cell.subLines.length;
+                }
+                return maxSub > 0 ? baseRowH + maxSub * subLineH + 2 : baseRowH;
+            });
+            const totalH = titleH + headerH + rowHeights.reduce((a, b) => a + b, 0) + 10;
 
             const canvas = document.createElement('canvas');
             canvas.width = totalW * scale;
@@ -2015,7 +2025,9 @@ The election has now been called! We need people to hand out 'How to Vote' cards
             y += headerH;
             ctx.font = '11px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
 
-            for (const row of rows) {
+            for (let ri = 0; ri < rows.length; ri++) {
+                const row = rows[ri];
+                const rowH = rowHeights[ri];
                 if (row.divider) {
                     ctx.strokeStyle = '#ddd';
                     ctx.lineWidth = 0.5;
@@ -2032,7 +2044,7 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                         const bw = Math.max(ctx.measureText(cell.text).width + 10, 36);
                         const bx = x + (cw - bw) / 2;
                         const by = y + 3;
-                        const bh = rowH - 6;
+                        const bh = baseRowH - 6;
                         if (colors.bg) {
                             ctx.fillStyle = colors.bg;
                             bcDrawRoundedRect(ctx, bx, by, bw, bh, 3);
@@ -2043,6 +2055,16 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                         ctx.font = 'bold 11px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
                         ctx.fillText(cell.text, x + cw / 2, y + 17);
                         ctx.font = '11px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+                        if (cell.subLines && cell.subLines.length > 0) {
+                            ctx.font = '8px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+                            ctx.textAlign = 'center';
+                            for (let sl = 0; sl < cell.subLines.length; sl++) {
+                                const sub = cell.subLines[sl];
+                                ctx.fillStyle = sub.partial ? '#e65100' : '#555';
+                                ctx.fillText(sub.text, x + cw / 2, y + baseRowH + sl * subLineH);
+                            }
+                            ctx.font = '11px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+                        }
                     } else {
                         ctx.fillStyle = cell.color || '#333';
                         ctx.textAlign = cell.align || 'left';
@@ -2138,7 +2160,14 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                     if (sc.need === 0) {
                         cells.push({ text: '\u00b7', align: 'center', color: '#ccc' });
                     } else {
-                        cells.push({ text: `${sc.have}/${sc.need}`, badge: true, colors: bcSlotColors(sc.have, sc.need) });
+                        const cellData = { text: `${sc.have}/${sc.need}`, badge: true, colors: bcSlotColors(sc.have, sc.need) };
+                        if (bcShowNames && sc.volunteers.length > 0) {
+                            cellData.subLines = sc.volunteers.map(v => ({
+                                text: bcShortName(v.name) + (v.isPartial ? ' \u00bd' : ''),
+                                partial: v.isPartial
+                            }));
+                        }
+                        cells.push(cellData);
                     }
                 }
                 const pct = booth.peopleRequired > 0
@@ -2166,8 +2195,10 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                 modeLabel = ` (${PREPOLL_DATE_LABELS[bcFilterPPDay]})`;
                 modeSuffix = '-pp-day' + bcFilterPPDay;
             }
-            const canvas = bcDrawTableToCanvas('Booth Coverage \u2014 ' + electorate.name + modeLabel, headers, rows);
-            bcDownloadCanvas(canvas, 'booth-coverage-' + electorate.name.toLowerCase().replace(/\s+/g, '-') + modeSuffix + '.png');
+            const namesLabel = bcShowNames ? ' (with names)' : '';
+            const namesSuffix = bcShowNames ? '-names' : '';
+            const canvas = bcDrawTableToCanvas('Booth Coverage \u2014 ' + electorate.name + modeLabel + namesLabel, headers, rows);
+            bcDownloadCanvas(canvas, 'booth-coverage-' + electorate.name.toLowerCase().replace(/\s+/g, '-') + modeSuffix + namesSuffix + '.png');
         }
 
         function minsToTime(mins) {
