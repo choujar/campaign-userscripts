@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         List Manager Tweaks
 // @namespace    https://github.com/choujar/campaign-userscripts
-// @version      1.50.8
+// @version      1.51.0
 // @description  UX improvements for List Manager and Rocket
 // @author       Sahil Choujar
 // @match        https://listmanager.greens.org.au/*
@@ -4267,6 +4267,11 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                                     textarea.value = prefix + noteText;
                                     textarea.dispatchEvent(new Event('input', { bubbles: true }));
                                     textarea.dispatchEvent(new Event('change', { bubbles: true }));
+                                    // Auto-save after Angular picks up the change
+                                    setTimeout(() => {
+                                        const saveBtn = document.querySelector('button.btn-primary:not([disabled])');
+                                        if (saveBtn && /save/i.test(saveBtn.textContent)) saveBtn.click();
+                                    }, 500);
                                 }
                             }
                             setTimeout(() => {
@@ -4993,6 +4998,15 @@ The election has now been called! We need people to hand out 'How to Vote' cards
         injectTaskSummary();
         injectMetaStrip();
         injectNoteChips();
+
+        // Keyboard shortcut: R to trigger quick reminder
+        document.addEventListener('keydown', (e) => {
+            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
+            if (e.key === 'r' || e.key === 'R') {
+                const quickBtn = document.querySelector('.gus-quick-remind:not(.gus-sent)');
+                if (quickBtn) { e.preventDefault(); quickBtn.click(); }
+            }
+        });
     }
 
 })();
