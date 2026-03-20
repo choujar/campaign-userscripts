@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         List Manager Tweaks
 // @namespace    https://github.com/choujar/campaign-userscripts
-// @version      1.49.3
+// @version      1.49.4
 // @description  UX improvements for List Manager and Rocket
 // @author       Sahil Choujar
 // @match        https://listmanager.greens.org.au/*
@@ -4297,7 +4297,15 @@ The election has now been called! We need people to hand out 'How to Vote' cards
 
         function formatShiftsForSms(shifts) {
             if (shifts.length === 0) return '';
-            return shifts.map(s => {
+            // Deduplicate by booth+time (shared booths appear in multiple electorates)
+            const seen = new Set();
+            const unique = shifts.filter(s => {
+                const key = s.booth + '|' + s.time;
+                if (seen.has(key)) return false;
+                seen.add(key);
+                return true;
+            });
+            const parts = unique.map(s => {
                 const time = s.time.replace(/(\d{1,2}):00/g, (_, h) => {
                     const hr = parseInt(h);
                     return hr > 12 ? (hr - 12) + 'pm' : hr + (hr < 12 ? 'am' : 'pm');
@@ -4306,7 +4314,10 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                     return (hr > 12 ? (hr - 12) : hr) + ':' + m + (hr >= 12 ? 'pm' : 'am');
                 });
                 return s.booth + ' ' + time;
-            }).join(', ');
+            });
+            if (parts.length === 1) return parts[0];
+            if (parts.length === 2) return parts[0] + ' and ' + parts[1];
+            return parts.slice(0, -1).join(', ') + ' and ' + parts[parts.length - 1];
         }
 
         const ELECTORATES = [
