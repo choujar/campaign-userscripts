@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         List Manager Tweaks
 // @namespace    https://github.com/choujar/campaign-userscripts
-// @version      1.49.4
+// @version      1.49.5
 // @description  UX improvements for List Manager and Rocket
 // @author       Sahil Choujar
 // @match        https://listmanager.greens.org.au/*
@@ -4250,7 +4250,7 @@ The election has now been called! We need people to hand out 'How to Vote' cards
 
         // --- Polling Day shift scraping from Rocket contact page ---
         const CONFIRMATION_TEMPLATE_NAME = 'Reminder + Referral';
-        const CONFIRMATION_TEMPLATE_BODY = `Hi [their name], it's [your name] from the Greens. Just a reminder \u2014 you're on tomorrow at [shifts]. T-shirt and How-to-Vote cards will be there for you. Don't forget to vote yourself too!\n\nOne thing \u2014 One Nation are out in force at booths and at some sites they're the only alternative voters see to Labor and Liberal. If you know someone who could spare even an hour tomorrow, send me their name and number (with consent) or share mine: 0434 331 085 ([your name]). Even one extra person makes a difference. Thank you!`;
+        const CONFIRMATION_TEMPLATE_BODY = `Hi [their name], it's [your name] from the Greens. Just a reminder \u2014 you're on tomorrow at [shifts]. T-shirt and How-to-Vote cards will be there for you. Don't forget to vote yourself too!\n\nDouble your impact \u2014 if you know someone who could spare even an hour on a booth tomorrow, send me their name and number (with consent) or share mine: 0434 331 085 ([your name]). Let's make sure voters see the Greens everywhere. Thank you!`;
 
         function getPollingDayShifts() {
             const headers = document.querySelectorAll('h4');
