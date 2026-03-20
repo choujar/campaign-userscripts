@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         List Manager Tweaks
 // @namespace    https://github.com/choujar/campaign-userscripts
-// @version      1.50.6
+// @version      1.50.7
 // @description  UX improvements for List Manager and Rocket
 // @author       Sahil Choujar
 // @match        https://listmanager.greens.org.au/*
@@ -4396,15 +4396,22 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                 return true;
             });
             if (unique.length === 0) return '';
-            // Group by booth name
+            // Group by booth name, sort times chronologically
             const byBooth = {};
             for (const s of unique) {
                 if (!byBooth[s.booth]) byBooth[s.booth] = [];
-                byBooth[s.booth].push(formatTimeNice(s.time));
+                byBooth[s.booth].push({ formatted: formatTimeNice(s.time), raw: s.time });
+            }
+            for (const booth in byBooth) {
+                byBooth[booth].sort((a, b) => {
+                    const startA = parseInt(a.raw.split('-')[0].replace(':', ''));
+                    const startB = parseInt(b.raw.split('-')[0].replace(':', ''));
+                    return startA - startB;
+                });
             }
             // Format: "Booth A 8am-10am and 4pm-6pm" per booth, then join booths
             const boothParts = Object.entries(byBooth).map(([booth, times]) => {
-                return booth + ' ' + joinNatural(times);
+                return booth + ' ' + joinNatural(times.map(t => t.formatted));
             });
             return joinNatural(boothParts);
         }
