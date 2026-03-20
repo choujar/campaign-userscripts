@@ -1119,6 +1119,20 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                     return editor;
                 }
 
+                // Your Name setting
+                const nameSection = document.createElement('div');
+                nameSection.className = 'gus-tmpl-section';
+                nameSection.innerHTML = `<h3>Your Name</h3>
+                    <div style="display:flex;align-items:center;gap:8px;margin:6px 0 10px;">
+                        <input type="text" class="gus-your-name-setting" value="${escapeHtml(getYourName() || '')}" placeholder="Used for [your name] in templates" style="flex:1;padding:6px 8px;border:1px solid #ccc;border-radius:4px;font-size:13px;">
+                    </div>`;
+                const nameInput = nameSection.querySelector('.gus-your-name-setting');
+                nameInput.addEventListener('input', () => {
+                    const val = nameInput.value.trim();
+                    if (val) GM_setValue('gus_your_name', val);
+                });
+                modal.appendChild(nameSection);
+
                 modal.appendChild(buildSection('Global Templates', globalTmpls, 'global'));
                 modal.appendChild(buildSection(`Templates for "${escapeHtml(listName || listId)}"`, listTmpls, 'list'));
 
@@ -4007,8 +4021,7 @@ The election has now been called! We need people to hand out 'How to Vote' cards
             }
 
             let currentTemplate = templates[activeIndex].body;
-            const showNameInput = templates.some(t => /\[your name\]/i.test(t.body));
-            let yourName = getYourName();
+            const yourName = getYourName();
 
             const overlay = document.createElement('div');
             overlay.className = 'gus-overlay';
@@ -4032,8 +4045,6 @@ The election has now been called! We need people to hand out 'How to Vote' cards
 
             function renderModal(electorate) {
                 currentElectorate = electorate;
-                const nameInputVal = overlay.querySelector('.gus-your-name-input');
-                if (nameInputVal) yourName = nameInputVal.value.trim() || null;
 
                 const ppb = getSelectedPpb();
                 const filled = fillTemplate(currentTemplate, contactName.preferred, suburb, electorate, yourName, ppb, shiftsText);
@@ -4080,12 +4091,6 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                         <h2>Send SMS</h2>
                         <div class="gus-to">To: ${escapeHtml(contactName.preferred)} (${escapeHtml(phone.display)})</div>
                         ${pillsHtml}
-                        ${showNameInput ? `
-                            <div class="gus-name-row">
-                                <label>Your name:</label>
-                                <input type="text" class="gus-your-name-input" value="${escapeHtml(yourName || '')}" placeholder="Enter your name">
-                            </div>
-                        ` : ''}
                         ${ppbRowHtml}
                         <div class="gus-preview-label">Message preview:</div>
                         <div class="gus-preview">${previewHtml}</div>
@@ -4132,15 +4137,6 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                     });
                 }
 
-                const nameInput = overlay.querySelector('.gus-your-name-input');
-                if (nameInput) {
-                    nameInput.addEventListener('input', () => {
-                        yourName = nameInput.value.trim() || null;
-                        if (yourName) GM_setValue('gus_your_name', yourName);
-                        updatePreview();
-                    });
-                    if (!yourName) nameInput.focus();
-                }
             }
 
             dismissOnEscapeOrClickOutside(overlay);
@@ -4254,7 +4250,7 @@ The election has now been called! We need people to hand out 'How to Vote' cards
 
         // --- Polling Day shift scraping from Rocket contact page ---
         const CONFIRMATION_TEMPLATE_NAME = 'Reminder + Referral';
-        const CONFIRMATION_TEMPLATE_BODY = `Hi [their name], it's Sahil from the Greens. Just a reminder — you're on tomorrow at [shifts]. T-shirt and How-to-Vote cards will be there for you. Don't forget to vote yourself too!\n\nOne thing — One Nation are out in force at booths and at some sites they're the only alternative voters see to Labor and Liberal. If you know someone who could spare even an hour tomorrow, send me their name and number (with consent) or share mine: 0434 331 085 (Sahil). Even one extra person makes a difference. Thank you!`;
+        const CONFIRMATION_TEMPLATE_BODY = `Hi [their name], it's [your name] from the Greens. Just a reminder \u2014 you're on tomorrow at [shifts]. T-shirt and How-to-Vote cards will be there for you. Don't forget to vote yourself too!\n\nOne thing \u2014 One Nation are out in force at booths and at some sites they're the only alternative voters see to Labor and Liberal. If you know someone who could spare even an hour tomorrow, send me their name and number (with consent) or share mine: 0434 331 085 ([your name]). Even one extra person makes a difference. Thank you!`;
 
         function getPollingDayShifts() {
             const headers = document.querySelectorAll('h4');
