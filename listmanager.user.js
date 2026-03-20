@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         List Manager Tweaks
 // @namespace    https://github.com/choujar/campaign-userscripts
-// @version      1.51.4
+// @version      1.51.5
 // @description  UX improvements for List Manager and Rocket
 // @author       Sahil Choujar
 // @match        https://listmanager.greens.org.au/*
@@ -4266,28 +4266,26 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                         quickBtn.title = 'Quick send: Reminder + Referral';
                         quickBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>';
                         quickBtn.addEventListener('click', () => {
-                            // Auto-fill the contact notes textarea
-                            const noteText = GM_getValue('gus_quick_remind_note', 'Sent PD Reminder + Referral Ask SMS');
-                            if (noteText) {
-                                const today = new Date();
-                                const dateStr = today.getDate() + '/' + (today.getMonth() + 1);
-                                const textarea = document.querySelector('textarea[ng-model="shared.contact.rec.newnote"]');
-                                if (textarea) {
-                                    const prefix = dateStr + ' - ';
-                                    textarea.value = prefix + noteText;
-                                    textarea.dispatchEvent(new Event('input', { bubbles: true }));
-                                    textarea.dispatchEvent(new Event('change', { bubbles: true }));
-                                    // Auto-save after Angular picks up the change
-                                    setTimeout(() => {
-                                        const saveBtn = document.querySelector('button.btn-primary:not([disabled])');
-                                        if (saveBtn && /save/i.test(saveBtn.textContent)) saveBtn.click();
-                                    }, 500);
-                                }
-                            }
+                            quickBtn.classList.add('gus-sent');
+                            quickBtn.title = 'Sent!';
+                            // Fill note + auto-save AFTER the SMS app opens (delay to avoid "Leave site?" prompt)
                             setTimeout(() => {
-                                quickBtn.classList.add('gus-sent');
-                                quickBtn.title = 'Sent!';
-                            }, 300);
+                                const noteText = GM_getValue('gus_quick_remind_note', 'Sent PD Reminder + Referral Ask SMS');
+                                if (noteText) {
+                                    const today = new Date();
+                                    const dateStr = today.getDate() + '/' + (today.getMonth() + 1);
+                                    const textarea = document.querySelector('textarea[ng-model="shared.contact.rec.newnote"]');
+                                    if (textarea) {
+                                        textarea.value = dateStr + ' - ' + noteText;
+                                        textarea.dispatchEvent(new Event('input', { bubbles: true }));
+                                        textarea.dispatchEvent(new Event('change', { bubbles: true }));
+                                        setTimeout(() => {
+                                            const saveBtn = document.querySelector('button.btn-primary:not([disabled])');
+                                            if (saveBtn && /save/i.test(saveBtn.textContent)) saveBtn.click();
+                                        }, 500);
+                                    }
+                                }
+                            }, 1000);
                         });
                     }
                 }
@@ -5036,10 +5034,10 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                     const quickBtn = document.querySelector('a.gus-quick-remind:not(.gus-sent)');
                     if (quickBtn) {
                         e.preventDefault();
-                        // Trigger the click handler (auto-fill note + auto-save)
+                        // Mark as sent and schedule note fill
                         quickBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-                        // Also navigate to the sms: URL since programmatic click may not follow href
-                        window.location.href = quickBtn.href;
+                        // Navigate to sms: URL
+                        setTimeout(() => { window.location.href = quickBtn.href; }, 50);
                     }
                 }
             });
