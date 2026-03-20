@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         List Manager Tweaks
 // @namespace    https://github.com/choujar/campaign-userscripts
-// @version      1.50.5
+// @version      1.50.6
 // @description  UX improvements for List Manager and Rocket
 // @author       Sahil Choujar
 // @match        https://listmanager.greens.org.au/*
@@ -1137,13 +1137,21 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                 const quickSection = document.createElement('div');
                 quickSection.className = 'gus-tmpl-section';
                 const quickEnabled = GM_getValue('gus_quick_remind', false);
+                const quickNote = GM_getValue('gus_quick_remind_note', 'Sent PD Reminder + Referral Ask SMS');
                 quickSection.innerHTML = `<h3>Quick Reminder</h3>
-                    <label style="display:flex;align-items:center;gap:8px;margin:6px 0 10px;cursor:pointer;font-size:13px;">
+                    <label style="display:flex;align-items:center;gap:8px;margin:6px 0 8px;cursor:pointer;font-size:13px;">
                         <input type="checkbox" class="gus-quick-remind-cb" ${quickEnabled ? 'checked' : ''} style="margin:0;cursor:pointer;">
                         Show quick reminder button next to SMS icon (sends Reminder + Referral directly, no modal)
-                    </label>`;
+                    </label>
+                    <div style="display:flex;align-items:center;gap:8px;margin:0 0 10px;">
+                        <label style="font-size:12px;color:#666;white-space:nowrap;">Auto-fill note:</label>
+                        <input type="text" class="gus-quick-remind-note" value="${escapeHtml(quickNote)}" placeholder="Note to auto-fill after sending" style="flex:1;padding:5px 8px;border:1px solid #ccc;border-radius:4px;font-size:12px;">
+                    </div>`;
                 quickSection.querySelector('.gus-quick-remind-cb').addEventListener('change', (e) => {
                     GM_setValue('gus_quick_remind', e.target.checked);
+                });
+                quickSection.querySelector('.gus-quick-remind-note').addEventListener('input', (e) => {
+                    GM_setValue('gus_quick_remind_note', e.target.value.trim());
                 });
                 modal.appendChild(quickSection);
 
@@ -4248,6 +4256,19 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                         quickBtn.title = 'Quick send: Reminder + Referral';
                         quickBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>';
                         quickBtn.addEventListener('click', () => {
+                            // Auto-fill the contact notes textarea
+                            const noteText = GM_getValue('gus_quick_remind_note', 'Sent PD Reminder + Referral Ask SMS');
+                            if (noteText) {
+                                const today = new Date();
+                                const dateStr = today.getDate() + '/' + (today.getMonth() + 1);
+                                const textarea = document.querySelector('textarea[ng-model="shared.contact.rec.newnote"]');
+                                if (textarea) {
+                                    const prefix = dateStr + ' - ';
+                                    textarea.value = prefix + noteText;
+                                    textarea.dispatchEvent(new Event('input', { bubbles: true }));
+                                    textarea.dispatchEvent(new Event('change', { bubbles: true }));
+                                }
+                            }
                             setTimeout(() => {
                                 quickBtn.classList.add('gus-sent');
                                 quickBtn.title = 'Sent!';
