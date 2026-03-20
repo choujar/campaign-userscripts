@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         List Manager Tweaks
 // @namespace    https://github.com/choujar/campaign-userscripts
-// @version      1.50.7
+// @version      1.50.8
 // @description  UX improvements for List Manager and Rocket
 // @author       Sahil Choujar
 // @match        https://listmanager.greens.org.au/*
@@ -4403,11 +4403,27 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                 byBooth[s.booth].push({ formatted: formatTimeNice(s.time), raw: s.time });
             }
             for (const booth in byBooth) {
+                // Sort by start time
                 byBooth[booth].sort((a, b) => {
                     const startA = parseInt(a.raw.split('-')[0].replace(':', ''));
                     const startB = parseInt(b.raw.split('-')[0].replace(':', ''));
                     return startA - startB;
                 });
+                // Merge adjacent/overlapping shifts
+                const merged = [];
+                for (const t of byBooth[booth]) {
+                    const [s, e] = t.raw.split('-');
+                    const start = s.trim(), end = e.trim();
+                    if (merged.length > 0 && merged[merged.length - 1].end === start) {
+                        merged[merged.length - 1].end = end;
+                    } else {
+                        merged.push({ start, end });
+                    }
+                }
+                byBooth[booth] = merged.map(m => ({
+                    formatted: formatTimeNice(m.start + '-' + m.end),
+                    raw: m.start + '-' + m.end
+                }));
             }
             // Format: "Booth A 8am-10am and 4pm-6pm" per booth, then join booths
             const boothParts = Object.entries(byBooth).map(([booth, times]) => {
