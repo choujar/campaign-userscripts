@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         List Manager Tweaks
 // @namespace    https://github.com/choujar/campaign-userscripts
-// @version      1.50.4
+// @version      1.50.5
 // @description  UX improvements for List Manager and Rocket
 // @author       Sahil Choujar
 // @match        https://listmanager.greens.org.au/*
@@ -4347,29 +4347,45 @@ The election has now been called! We need people to hand out 'How to Vote' cards
             return shifts;
         }
 
+        function formatTimeNice(time) {
+            return time.replace(/(\d{1,2}):00/g, (_, h) => {
+                const hr = parseInt(h);
+                return hr > 12 ? (hr - 12) + 'pm' : hr + (hr < 12 ? 'am' : 'pm');
+            }).replace(/(\d{1,2}):(\d{2})/g, (_, h, m) => {
+                const hr = parseInt(h);
+                return (hr > 12 ? (hr - 12) : hr) + ':' + m + (hr >= 12 ? 'pm' : 'am');
+            });
+        }
+
+        function joinNatural(parts) {
+            if (parts.length === 1) return parts[0];
+            if (parts.length === 2) return parts[0] + ' and ' + parts[1];
+            return parts.slice(0, -1).join(', ') + ' and ' + parts[parts.length - 1];
+        }
+
         function formatShiftsForSms(shifts) {
             if (shifts.length === 0) return '';
-            // Deduplicate by booth+time (shared booths appear in multiple electorates)
+            // Filter out coordinator-only entries, deduplicate by booth+time
             const seen = new Set();
             const unique = shifts.filter(s => {
+                if (s.isCoord) return false;
                 const key = s.booth + '|' + s.time;
                 if (seen.has(key)) return false;
                 seen.add(key);
                 return true;
             });
-            const parts = unique.map(s => {
-                const time = s.time.replace(/(\d{1,2}):00/g, (_, h) => {
-                    const hr = parseInt(h);
-                    return hr > 12 ? (hr - 12) + 'pm' : hr + (hr < 12 ? 'am' : 'pm');
-                }).replace(/(\d{1,2}):(\d{2})/g, (_, h, m) => {
-                    const hr = parseInt(h);
-                    return (hr > 12 ? (hr - 12) : hr) + ':' + m + (hr >= 12 ? 'pm' : 'am');
-                });
-                return s.booth + ' ' + time;
+            if (unique.length === 0) return '';
+            // Group by booth name
+            const byBooth = {};
+            for (const s of unique) {
+                if (!byBooth[s.booth]) byBooth[s.booth] = [];
+                byBooth[s.booth].push(formatTimeNice(s.time));
+            }
+            // Format: "Booth A 8am-10am and 4pm-6pm" per booth, then join booths
+            const boothParts = Object.entries(byBooth).map(([booth, times]) => {
+                return booth + ' ' + joinNatural(times);
             });
-            if (parts.length === 1) return parts[0];
-            if (parts.length === 2) return parts[0] + ' and ' + parts[1];
-            return parts.slice(0, -1).join(', ') + ' and ' + parts[parts.length - 1];
+            return joinNatural(boothParts);
         }
 
         const ELECTORATES = [
