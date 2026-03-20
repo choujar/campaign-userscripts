@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         List Manager Tweaks
 // @namespace    https://github.com/choujar/campaign-userscripts
-// @version      1.51.3
+// @version      1.51.4
 // @description  UX improvements for List Manager and Rocket
 // @author       Sahil Choujar
 // @match        https://listmanager.greens.org.au/*
@@ -5033,8 +5033,14 @@ The election has now been called! We need people to hand out 'How to Vote' cards
             document.addEventListener('keydown', (e) => {
                 if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
                 if (e.key === 'r' || e.key === 'R') {
-                    const quickBtn = document.querySelector('.gus-quick-remind:not(.gus-sent)');
-                    if (quickBtn) { e.preventDefault(); quickBtn.click(); }
+                    const quickBtn = document.querySelector('a.gus-quick-remind:not(.gus-sent)');
+                    if (quickBtn) {
+                        e.preventDefault();
+                        // Trigger the click handler (auto-fill note + auto-save)
+                        quickBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+                        // Also navigate to the sms: URL since programmatic click may not follow href
+                        window.location.href = quickBtn.href;
+                    }
                 }
             });
         }
