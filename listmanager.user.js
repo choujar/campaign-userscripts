@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         List Manager Tweaks
 // @namespace    https://github.com/choujar/campaign-userscripts
-// @version      1.48.3
+// @version      1.49.0
 // @description  UX improvements for List Manager and Rocket
 // @author       Sahil Choujar
 // @match        https://listmanager.greens.org.au/*
@@ -1101,7 +1101,7 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                     editor.className = 'gus-tmpl-editor';
                     editor.innerHTML = `
                         <input type="text" placeholder="Template name" value="${escapeHtml(initialName)}">
-                        <textarea placeholder="Message body — use [their name], [your name], [electorate], [suburb]">${escapeHtml(initialBody)}</textarea>
+                        <textarea placeholder="Message body — use [their name], [your name], [electorate], [suburb], [shifts]">${escapeHtml(initialBody)}</textarea>
                         <div class="gus-tmpl-editor-actions">
                             <button class="gus-tmpl-cancel-btn">Cancel</button>
                             <button class="gus-tmpl-save-btn">Save</button>
@@ -3899,7 +3899,7 @@ The election has now been called! We need people to hand out 'How to Vote' cards
 
         const FALLBACK_REGION = 'South Australia';
 
-        function fillTemplate(template, name, suburb, electorate, yourName, ppb) {
+        function fillTemplate(template, name, suburb, electorate, yourName, ppb, shiftsText) {
             let filled = template;
             const eVal = electorate || FALLBACK_REGION;
             const sVal = suburb || '';
@@ -3912,12 +3912,13 @@ The election has now been called! We need people to hand out 'How to Vote' cards
             filled = filled.replace(/\[electorate\]/gi, eVal);
             filled = filled.replace(/\[ppb_address\]/gi, ppb ? ppb.full : '');
             filled = filled.replace(/\[ppb\]/gi, ppb ? ppb.name : '');
+            filled = filled.replace(/\[shifts\]/gi, shiftsText || '');
             filled = filled.replace(/\s*\(\s*\)\s*/g, ' ');
             filled = filled.replace(/  +/g, ' ');
             return filled.trim();
         }
 
-        function fillTemplateForPreview(template, name, suburb, electorate, yourName, ppb) {
+        function fillTemplateForPreview(template, name, suburb, electorate, yourName, ppb, shiftsText) {
             let tmpl = template;
             const eVal = electorate || FALLBACK_REGION;
             const sVal = suburb || '';
@@ -3949,6 +3950,9 @@ The election has now been called! We need people to hand out 'How to Vote' cards
             html = html.replace(/\[ppb\]/gi, ppb
                 ? `<span class="gus-filled">${escapeHtml(ppb.name)}</span>`
                 : '<span class="gus-placeholder">[ppb]</span>');
+            html = html.replace(/\[shifts\]/gi, shiftsText
+                ? `<span class="gus-filled">${escapeHtml(shiftsText)}</span>`
+                : '<span class="gus-placeholder">[shifts]</span>');
 
             html = html.replace(/\[([^\]]+)\]/g, '<span class="gus-placeholder">[$1]</span>');
 
@@ -3984,6 +3988,16 @@ The election has now been called! We need people to hand out 'How to Vote' cards
             const listId = listMatch ? listMatch[1] : null;
             const templates = resolveTemplates(listId);
 
+            // Check for PD shifts and inject confirmation template if found
+            const pdShifts = getPollingDayShifts();
+            const shiftsText = formatShiftsForSms(pdShifts);
+            if (pdShifts.length > 0) {
+                const hasConfirmation = templates.some(t => t.name === CONFIRMATION_TEMPLATE_NAME);
+                if (!hasConfirmation) {
+                    templates.push({ name: CONFIRMATION_TEMPLATE_NAME, body: CONFIRMATION_TEMPLATE_BODY, scope: 'auto' });
+                }
+            }
+
             // Restore last-used template
             const lastUsedName = listId ? GM_getValue(getLastTemplateKey(listId), null) : null;
             let activeIndex = 0;
@@ -4008,8 +4022,8 @@ The election has now been called! We need people to hand out 'How to Vote' cards
 
             function updatePreview() {
                 const ppb = getSelectedPpb();
-                const filled = fillTemplate(currentTemplate, contactName.preferred, suburb, currentElectorate, yourName, ppb);
-                const previewHtml = fillTemplateForPreview(currentTemplate, contactName.preferred, suburb, currentElectorate, yourName, ppb);
+                const filled = fillTemplate(currentTemplate, contactName.preferred, suburb, currentElectorate, yourName, ppb, shiftsText);
+                const previewHtml = fillTemplateForPreview(currentTemplate, contactName.preferred, suburb, currentElectorate, yourName, ppb, shiftsText);
                 const preview = overlay.querySelector('.gus-preview');
                 const sendLink = overlay.querySelector('.gus-send');
                 if (preview) preview.innerHTML = previewHtml;
@@ -4022,8 +4036,8 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                 if (nameInputVal) yourName = nameInputVal.value.trim() || null;
 
                 const ppb = getSelectedPpb();
-                const filled = fillTemplate(currentTemplate, contactName.preferred, suburb, electorate, yourName, ppb);
-                const previewHtml = fillTemplateForPreview(currentTemplate, contactName.preferred, suburb, electorate, yourName, ppb);
+                const filled = fillTemplate(currentTemplate, contactName.preferred, suburb, electorate, yourName, ppb, shiftsText);
+                const previewHtml = fillTemplateForPreview(currentTemplate, contactName.preferred, suburb, electorate, yourName, ppb, shiftsText);
 
                 // Build pill bar
                 let pillsHtml = '';
@@ -4097,7 +4111,7 @@ The election has now been called! We need people to hand out 'How to Vote' cards
 
                 overlay.querySelector('.gus-cancel').addEventListener('click', () => overlay.remove());
                 overlay.querySelector('.gus-copy-sms').addEventListener('click', (e) => {
-                    const currentFilled = fillTemplate(currentTemplate, contactName.preferred, suburb, currentElectorate, yourName, getSelectedPpb());
+                    const currentFilled = fillTemplate(currentTemplate, contactName.preferred, suburb, currentElectorate, yourName, getSelectedPpb(), shiftsText);
                     GM_setValue('smsTemplate_current', currentTemplate);
                     copyToClipboard(currentFilled).then(() => {
                         e.target.textContent = 'Copied!';
@@ -4236,6 +4250,67 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                 if (icons) icons.after(copyLink);
                 else span.appendChild(copyLink);
             });
+        }
+
+        // --- Polling Day shift scraping from Rocket contact page ---
+        const CONFIRMATION_TEMPLATE_NAME = 'Confirmation + Referral';
+        const CONFIRMATION_TEMPLATE_BODY = `Hi [their name], it's [your name] from the Greens. Confirming your shifts tomorrow: [shifts]. T-shirt and How-to-Vote cards will be there for you. If you know someone who could spare even an hour on a booth tomorrow, send me their name and number (with consent) or share mine: 0434 331 085 (Sahil). Thanks legend!`;
+
+        function getPollingDayShifts() {
+            const headers = document.querySelectorAll('h4');
+            let container = null;
+            for (const h of headers) {
+                if (h.textContent.trim() === 'Polling booth allocations') {
+                    container = h.parentElement;
+                    break;
+                }
+            }
+            if (!container) return [];
+            const items = container.querySelectorAll('li[ng-repeat*="pollingbooth_slots"]');
+            const shifts = [];
+            for (const li of items) {
+                const text = li.textContent.trim();
+                if (!text.startsWith('SA26')) continue;
+                const prepollEl = li.querySelector('i');
+                if (prepollEl && /prepoll/i.test(prepollEl.textContent)) continue;
+                const timeSpan = li.querySelector('span.ng-binding');
+                const coordEl = li.querySelector('[ng-if*="Coord"]');
+                const isCoord = coordEl && /coord/i.test(coordEl.textContent || '');
+                // Get booth name: text nodes BEFORE the time span / coord span, excluding "SA26"
+                const stopNode = timeSpan || coordEl;
+                let boothParts = [];
+                for (const node of li.childNodes) {
+                    if (stopNode && node === stopNode) break;
+                    if (node.nodeType === Node.TEXT_NODE) {
+                        const t = node.textContent.trim();
+                        if (t && t !== 'SA26') boothParts.push(t);
+                    }
+                }
+                const boothName = boothParts.join(' ').trim();
+                const timeText = timeSpan ? timeSpan.textContent.trim() : '';
+                if (boothName || timeText) {
+                    shifts.push({
+                        booth: boothName,
+                        time: isCoord ? 'Coordinator' : timeText,
+                        isCoord: !!isCoord
+                    });
+                }
+            }
+            return shifts;
+        }
+
+        function formatShiftsForSms(shifts) {
+            if (shifts.length === 0) return '';
+            return shifts.map(s => {
+                const time = s.time.replace(/(\d{1,2}):00/g, (_, h) => {
+                    const hr = parseInt(h);
+                    return hr > 12 ? (hr - 12) + 'pm' : hr + (hr < 12 ? 'am' : 'pm');
+                }).replace(/(\d{1,2}):(\d{2})/g, (_, h, m) => {
+                    const hr = parseInt(h);
+                    return (hr > 12 ? (hr - 12) : hr) + ':' + m + (hr >= 12 ? 'pm' : 'am');
+                });
+                return s.booth + ' ' + time;
+            }).join(', ');
         }
 
         const ELECTORATES = [
