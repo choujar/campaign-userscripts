@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         List Manager Tweaks
 // @namespace    https://github.com/choujar/campaign-userscripts
-// @version      1.51.2
+// @version      1.51.3
 // @description  UX improvements for List Manager and Rocket
 // @author       Sahil Choujar
 // @match        https://listmanager.greens.org.au/*
@@ -4654,6 +4654,7 @@ The election has now been called! We need people to hand out 'How to Vote' cards
         };
 
         function injectShiftsBanner() {
+            if (!GM_getValue('gus_quick_remind', false)) return;
             const panelBody = document.querySelector('.panel-body');
             if (!panelBody || panelBody.querySelector('.gus-shifts-banner')) return;
             const pdShifts = getPollingDayShifts();
@@ -5027,14 +5028,16 @@ The election has now been called! We need people to hand out 'How to Vote' cards
         injectMetaStrip();
         injectNoteChips();
 
-        // Keyboard shortcut: R to trigger quick reminder
-        document.addEventListener('keydown', (e) => {
-            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
-            if (e.key === 'r' || e.key === 'R') {
-                const quickBtn = document.querySelector('.gus-quick-remind:not(.gus-sent)');
-                if (quickBtn) { e.preventDefault(); quickBtn.click(); }
-            }
-        });
+        // Keyboard shortcut: R to trigger quick reminder (only when quick remind enabled)
+        if (GM_getValue('gus_quick_remind', false)) {
+            document.addEventListener('keydown', (e) => {
+                if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
+                if (e.key === 'r' || e.key === 'R') {
+                    const quickBtn = document.querySelector('.gus-quick-remind:not(.gus-sent)');
+                    if (quickBtn) { e.preventDefault(); quickBtn.click(); }
+                }
+            });
+        }
     }
 
 })();
