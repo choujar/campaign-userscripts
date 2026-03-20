@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         List Manager Tweaks
 // @namespace    https://github.com/choujar/campaign-userscripts
-// @version      1.49.2
+// @version      1.49.3
 // @description  UX improvements for List Manager and Rocket
 // @author       Sahil Choujar
 // @match        https://listmanager.greens.org.au/*
@@ -1124,7 +1124,7 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                 nameSection.className = 'gus-tmpl-section';
                 nameSection.innerHTML = `<h3>Your Name</h3>
                     <div style="display:flex;align-items:center;gap:8px;margin:6px 0 10px;">
-                        <input type="text" class="gus-your-name-setting" value="${escapeHtml(getYourName() || '')}" placeholder="Used for [your name] in templates" style="flex:1;padding:6px 8px;border:1px solid #ccc;border-radius:4px;font-size:13px;">
+                        <input type="text" class="gus-your-name-setting" value="${escapeHtml(GM_getValue('gus_your_name', '') || '')}" placeholder="Used for [your name] in templates" style="flex:1;padding:6px 8px;border:1px solid #ccc;border-radius:4px;font-size:13px;">
                     </div>`;
                 const nameInput = nameSection.querySelector('.gus-your-name-setting');
                 nameInput.addEventListener('input', () => {
