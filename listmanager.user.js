@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         List Manager Tweaks
 // @namespace    https://github.com/choujar/campaign-userscripts
-// @version      1.51.1
+// @version      1.51.2
 // @description  UX improvements for List Manager and Rocket
 // @author       Sahil Choujar
 // @match        https://listmanager.greens.org.au/*
@@ -4660,10 +4660,12 @@ The election has now been called! We need people to hand out 'How to Vote' cards
             if (pdShifts.length === 0) return;
             const shiftsText = formatShiftsForSms(pdShifts);
             if (!shiftsText) return;
+            const contactName = getContactName();
+            const firstName = contactName ? contactName.preferred : '[name]';
+            const preview = 'Hi ' + firstName + ', a friendly reminder from the Greens that you\'re on a booth tomorrow at ' + shiftsText + '.';
             const banner = document.createElement('div');
             banner.className = 'gus-shifts-banner';
-            banner.innerHTML = '<strong>Tomorrow:</strong> ' + escapeHtml(shiftsText);
-            // Insert at the top of panelBody
+            banner.innerHTML = '<strong>SMS preview:</strong> ' + escapeHtml(preview) + ' <span style="color:#999;font-style:italic;">[press R to send]</span>';
             panelBody.insertBefore(banner, panelBody.firstChild);
         }
 
