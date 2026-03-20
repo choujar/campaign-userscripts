@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         List Manager Tweaks
 // @namespace    https://github.com/choujar/campaign-userscripts
-// @version      1.51.0
+// @version      1.51.1
 // @description  UX improvements for List Manager and Rocket
 // @author       Sahil Choujar
 // @match        https://listmanager.greens.org.au/*
@@ -3251,6 +3251,16 @@ The election has now been called! We need people to hand out 'How to Vote' cards
             .gus-quick-remind.gus-sent {
                 background: #2e7d32;
             }
+            .gus-shifts-banner {
+                background: #e8f5e9;
+                border: 1px solid #a5d6a7;
+                border-radius: 4px;
+                padding: 6px 10px;
+                margin-bottom: 8px;
+                font-size: 13px;
+                color: #1b5e20;
+            }
+            .gus-shifts-banner strong { color: #2e7d32; }
             .gus-copy-phone {
                 background: #1565c0;
                 color: #fff;
@@ -4643,6 +4653,20 @@ The election has now been called! We need people to hand out 'How to Vote' cards
             X: 'Cancelled',
         };
 
+        function injectShiftsBanner() {
+            const panelBody = document.querySelector('.panel-body');
+            if (!panelBody || panelBody.querySelector('.gus-shifts-banner')) return;
+            const pdShifts = getPollingDayShifts();
+            if (pdShifts.length === 0) return;
+            const shiftsText = formatShiftsForSms(pdShifts);
+            if (!shiftsText) return;
+            const banner = document.createElement('div');
+            banner.className = 'gus-shifts-banner';
+            banner.innerHTML = '<strong>Tomorrow:</strong> ' + escapeHtml(shiftsText);
+            // Insert at the top of panelBody
+            panelBody.insertBefore(banner, panelBody.firstChild);
+        }
+
         function injectTaskSummary() {
             const panelBody = document.querySelector('.panel-body');
             if (!panelBody) return;
@@ -4984,6 +5008,7 @@ The election has now been called! We need people to hand out 'How to Vote' cards
             injectElectorateDropdown();
             convertShiftTimes();
             prefetchElectorate();
+            injectShiftsBanner();
             injectTaskSummary();
             injectMetaStrip();
             injectNoteChips();
@@ -4995,6 +5020,7 @@ The election has now been called! We need people to hand out 'How to Vote' cards
         injectElectorateDropdown();
         convertShiftTimes();
         prefetchElectorate();
+        injectShiftsBanner();
         injectTaskSummary();
         injectMetaStrip();
         injectNoteChips();
