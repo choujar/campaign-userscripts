@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         List Manager Tweaks
 // @namespace    https://github.com/choujar/campaign-userscripts
-// @version      1.50.0
+// @version      1.50.1
 // @description  UX improvements for List Manager and Rocket
 // @author       Sahil Choujar
 // @match        https://listmanager.greens.org.au/*
@@ -1132,6 +1132,20 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                     if (val) GM_setValue('gus_your_name', val);
                 });
                 modal.appendChild(nameSection);
+
+                // Quick Reminder button setting
+                const quickSection = document.createElement('div');
+                quickSection.className = 'gus-tmpl-section';
+                const quickEnabled = GM_getValue('gus_quick_remind', false);
+                quickSection.innerHTML = `<h3>Quick Reminder</h3>
+                    <label style="display:flex;align-items:center;gap:8px;margin:6px 0 10px;cursor:pointer;font-size:13px;">
+                        <input type="checkbox" class="gus-quick-remind-cb" ${quickEnabled ? 'checked' : ''} style="margin:0;cursor:pointer;">
+                        Show quick reminder button next to SMS icon (sends Reminder + Referral directly, no modal)
+                    </label>`;
+                quickSection.querySelector('.gus-quick-remind-cb').addEventListener('change', (e) => {
+                    GM_setValue('gus_quick_remind', e.target.checked);
+                });
+                modal.appendChild(quickSection);
 
                 modal.appendChild(buildSection('Global Templates', globalTmpls, 'global'));
                 modal.appendChild(buildSection(`Templates for "${escapeHtml(listName || listId)}"`, listTmpls, 'list'));
@@ -3219,6 +3233,16 @@ The election has now been called! We need people to hand out 'How to Vote' cards
             .gus-sms-link.gus-sms-warn:hover {
                 background: #b71c1c;
             }
+            .gus-quick-remind {
+                background: #e65100;
+                color: #fff;
+            }
+            .gus-quick-remind:hover {
+                background: #bf360c;
+            }
+            .gus-quick-remind.gus-sent {
+                background: #2e7d32;
+            }
             .gus-copy-phone {
                 background: #1565c0;
                 color: #fff;
@@ -4206,15 +4230,43 @@ The election has now been called! We need people to hand out 'How to Vote' cards
                     });
                 }
 
+                // Quick Reminder button — one click, straight to SMS app
+                let quickBtn = null;
+                if (isMobile && !checkDoNotSms() && GM_getValue('gus_quick_remind', false)) {
+                    const pdShifts = getPollingDayShifts();
+                    if (pdShifts.length > 0) {
+                        const shiftsText = formatShiftsForSms(pdShifts);
+                        const yourName = GM_getValue('gus_your_name', '') || '';
+                        const filled = CONFIRMATION_TEMPLATE_BODY
+                            .replace(/\[their name\]/gi, contactName.preferred || '')
+                            .replace(/\[your name\]/gi, yourName)
+                            .replace(/\[shifts\]/gi, shiftsText)
+                            .replace(/\\n/g, '\n');
+                        quickBtn = document.createElement('a');
+                        quickBtn.className = 'gus-sms-link gus-quick-remind';
+                        quickBtn.href = buildSmsUrl(digits, filled);
+                        quickBtn.title = 'Quick send: Reminder + Referral';
+                        quickBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>';
+                        quickBtn.addEventListener('click', () => {
+                            setTimeout(() => {
+                                quickBtn.classList.add('gus-sent');
+                                quickBtn.title = 'Sent!';
+                            }, 300);
+                        });
+                    }
+                }
+
                 // Place after the asterisk (primary indicator) if present, else after phone icon
                 const asterisk = span.querySelector('.fa-asterisk');
                 const anchor = asterisk || span.querySelector('a[href^="tel:"]');
                 if (anchor) {
                     if (smsLink) { anchor.after(smsLink); smsLink.after(copyLink); }
                     else { anchor.after(copyLink); }
+                    if (quickBtn) copyLink.after(quickBtn);
                 } else {
                     if (smsLink) span.appendChild(smsLink);
                     span.appendChild(copyLink);
+                    if (quickBtn) span.appendChild(quickBtn);
                 }
             });
         }
